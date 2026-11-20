@@ -322,7 +322,6 @@ async function subDel(id) {
   if (error) return say('subMsg', 'تعذر الحذف: ' + error.message, false);
   say('subMsg', 'تم الحذف.', true);
   await loadSubjects();
-  await loadGrades();
 }
 
 async function addSubject() {
@@ -387,6 +386,7 @@ function pickGroup(id) {
 }
 
 $('renameGroupBtn').onclick = async () => {
+  if (!currentGroup) return say('groupMsg', 'اختر فوجًا أولًا.', false);
   const name = $('groupRename').value.trim();
   if (!name) return say('groupMsg', 'اكتب الاسم الجديد.', false);
   const { error } = await sb.from('school_groups').update({ name }).eq('id', currentGroup.id);
