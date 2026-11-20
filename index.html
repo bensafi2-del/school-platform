@@ -83,7 +83,9 @@ $('signupBtn').onclick = async () => {
   const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl() } });
   if (error) return say('authMsg', 'تعذر إنشاء الحساب: ' + error.message, false);
   say('authMsg', 'تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.', true);
-  $('loginBtn').onclick = async () => {
+};
+
+$('loginBtn').onclick = async () => {
   const { error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
   if (error) say('authMsg', 'تعذر تسجيل الدخول: ' + error.message, false);
 };
@@ -134,7 +136,7 @@ async function loadSchools() {
   const { data, error } = await sb.from('schools').select('id,name,school_year').order('created_at', { ascending: false });
   if (error) return say('schoolMsg', 'تعذر تحميل المؤسسات: ' + error.message, false);
   $('schoolList').innerHTML = data.length
-    ? data.map(s => <div class="row"><span>${esc(s.name)} <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>).join('')
+    ? data.map(s => `<div class="row"><span>${esc(s.name)} <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>`).join('')
     : '<p class="note">لا توجد مؤسسات بعد.</p>';
 }
 
