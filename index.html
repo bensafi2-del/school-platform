@@ -7,18 +7,28 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   body{font-family:Tahoma,Arial,sans-serif;background:#f3f6f5;color:#1c2b28;margin:0;padding:16px}
-  .card{background:#fff;border:1px solid #d6e0dd;border-radius:12px;padding:18px;max-width:520px;margin:0 auto 16px}
+  .card{background:#fff;border:1px solid #d6e0dd;border-radius:12px;padding:18px;max-width:560px;margin:0 auto 16px}
   h1{font-size:20px;text-align:center;color:#1d5c4d;margin:0 0 10px}
+  h2{font-size:17px;color:#1d5c4d;margin:16px 0 8px}
   label{display:block;margin:10px 0 4px;font-size:14px}
-  input{width:100%;padding:10px;border:1px solid #bccbc7;border-radius:8px;font-size:15px;box-sizing:border-box}
+  input,select{width:100%;padding:10px;border:1px solid #bccbc7;border-radius:8px;font-size:15px;box-sizing:border-box;background:#fff}
   button{width:100%;padding:11px;margin-top:10px;border:0;border-radius:8px;background:#1d5c4d;color:#fff;font-size:15px;cursor:pointer}
   button.secondary{background:#e2efeb;color:#1d5c4d}
   button.danger{background:#a8322a;width:auto;margin:0;padding:5px 10px;font-size:13px}
+  button.small{width:auto;margin:0;padding:6px 10px;font-size:13px}
   .msg{margin-top:10px;font-size:14px;text-align:center;min-height:20px}
   .ok{color:#1d5c4d}.err{color:#a8322a}
-  .row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eef2f1;padding:8px 0;gap:8px}
+  .row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eef2f1;padding:8px 0;gap:8px;flex-wrap:wrap}
   .hidden{display:none}
   .note{font-size:13px;color:#5d6f6a}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .chip{background:#e2efeb;color:#1d5c4d;border-radius:999px;padding:5px 10px;font-size:13px;cursor:pointer;border:0;width:auto;margin:0}
+  .chip.on{background:#1d5c4d;color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:7px;border-bottom:1px solid #eef2f1;text-align:right}
+  th{background:#e2efeb;color:#1d5c4d}
+  @media (max-width:520px){.grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -39,12 +49,12 @@
   <div class="card">
     <div class="row">
       <span id="who"></span>
-      <button id="logoutBtn" class="secondary" style="width:auto;margin:0;padding:6px 12px">خروج</button>
+      <button id="logoutBtn" class="secondary small">خروج</button>
     </div>
     <div id="adminBadge" class="note hidden">حساب مدير المنصة</div>
   </div>
 
-  <div class="card">
+  <div class="card" id="schoolsCard">
     <h1>مؤسساتي</h1>
     <label>اسم المؤسسة</label>
     <input id="schoolName">
@@ -53,6 +63,37 @@
     <button id="addSchoolBtn">إضافة مؤسسة</button>
     <div id="schoolMsg" class="msg"></div>
     <div id="schoolList"></div>
+  </div>
+
+  <div class="card hidden" id="schoolDetail">
+    <div class="row">
+      <h2 id="detailTitle" style="margin:0"></h2>
+      <button id="backBtn" class="secondary small">رجوع</button>
+    </div>
+
+    <h2>الأفواج</h2>
+    <div class="chips" id="groupChips"></div>
+    <div class="row" style="margin-top:8px">
+      <input id="groupRename" placeholder="اسم جديد للفوج المختار" style="flex:1">
+      <button id="renameGroupBtn" class="secondary small">حفظ الاسم</button>
+    </div>
+    <div id="groupMsg" class="msg"></div>
+
+    <h2 id="studentsTitle">التلاميذ</h2>
+    <div class="grid">
+      <div><label>الاسم</label><input id="stFirst"></div>
+      <div><label>اللقب</label><input id="stLast"></div>
+      <div><label>تاريخ الميلاد</label><input id="stBirth" type="date"></div>
+      <div><label>الجنس</label>
+        <select id="stSex"><option>ذكر</option><option>أنثى</option></select>
+      </div>
+    </div>
+    <button id="addStudentBtn">إضافة تلميذ إلى الفوج المختار</button>
+    <div id="studentMsg" class="msg"></div>
+
+    <label>بحث بالاسم أو اللقب</label>
+    <input id="stSearch" placeholder="اكتب للبحث">
+    <div id="studentList"></div>
   </div>
 
   <div class="card">
@@ -73,10 +114,14 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const say = (id, text, ok) => { const el = $(id); el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
 const redirectUrl = () => location.origin + location.pathname;
+const LEVELS = ['','السنة الأولى','السنة الثانية','السنة الثالثة','السنة الرابعة'];
 
 let recovering = false;
+let currentSchool = null;   // المؤسسة المفتوحة
+let currentGroup = null;    // الفوج المختار
+let groups = [];            // أفواج المؤسسة المفتوحة
 
-// ---------- تسجيل الدخول والإنشاء والاستعادة ----------
+// ---------- المصادقة ----------
 $('signupBtn').onclick = async () => {
   const email = $('email').value.trim(), password = $('password').value;
   if (!email || password.length < 12) return say('authMsg', 'اكتب بريدًا صحيحًا وكلمة مرور من 12 حرفًا على الأقل.', false);
@@ -110,10 +155,8 @@ $('changePassBtn').onclick = async () => {
   say('passMsg', 'تم تغيير كلمة المرور بنجاح.', true);
 };
 
-// ---------- حالة الدخول ----------
 sb.auth.onAuthStateChange((event, session) => {
   if (event === 'PASSWORD_RECOVERY') recovering = true;
-  // نؤجل العمليات لتفادي تعارض داخل المكتبة
   setTimeout(() => {
     if (session) showApp(session.user);
     else { $('authBox').classList.remove('hidden'); $('appBox').classList.add('hidden'); }
@@ -128,15 +171,22 @@ async function showApp(user) {
   const { data: adm } = await sb.from('admins').select('user_id').eq('user_id', user.id);
   $('adminBadge').classList.toggle('hidden', !(adm && adm.length));
   if (recovering) say('passMsg', 'أدخل كلمة المرور الجديدة ثم احفظها.', true);
+  showSchoolsList();
   loadSchools();
 }
 
 // ---------- المؤسسات ----------
+function showSchoolsList() {
+  $('schoolDetail').classList.add('hidden');
+  $('schoolsCard').classList.remove('hidden');
+  currentSchool = null;
+}
+
 async function loadSchools() {
   const { data, error } = await sb.from('schools').select('id,name,school_year').order('created_at', { ascending: false });
   if (error) return say('schoolMsg', 'تعذر تحميل المؤسسات: ' + error.message, false);
   $('schoolList').innerHTML = data.length
-    ? data.map(s => `<div class="row"><span>${esc(s.name)} <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>`).join('')
+    ? data.map(s => `<div class="row"><span><a href="#" onclick="openSchool('${s.id}','${esc(s.name).replace(/'/g,'')}');return false;">${esc(s.name)}</a> <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>`).join('')
     : '<p class="note">لا توجد مؤسسات بعد.</p>';
 }
 
@@ -156,6 +206,122 @@ async function removeSchool(id) {
   if (error) return say('schoolMsg', 'تعذر الحذف: ' + error.message, false);
   say('schoolMsg', 'تم الحذف.', true);
   loadSchools();
+}
+
+// ---------- فتح المؤسسة: الأفواج ----------
+async function openSchool(id, name) {
+  currentSchool = { id, name };
+  $('schoolsCard').classList.add('hidden');
+  $('schoolDetail').classList.remove('hidden');
+  $('detailTitle').textContent = name;
+  $('studentsTitle').textContent = 'التلاميذ';
+  await loadGroups();
+}
+
+$('backBtn').onclick = () => { showSchoolsList(); loadSchools(); };
+
+async function loadGroups() {
+  const { data, error } = await sb.from('school_groups').select('id,name,level,sort_order').eq('school_id', currentSchool.id).order('sort_order');
+  if (error) return say('groupMsg', 'تعذر تحميل الأفواج: ' + error.message, false);
+  groups = data;
+  $('groupChips').innerHTML = data.map(g => `<button class="chip ${currentGroup && currentGroup.id === g.id ? 'on' : ''}" onclick="pickGroup('${g.id}')">${esc(g.name)}</button>`).join('')
+    || '<p class="note">لا توجد أفواج.</p>';
+  if (!currentGroup || !data.find(g => g.id === currentGroup.id)) {
+    currentGroup = data[0] || null;
+  }
+  if (currentGroup) pickGroup(currentGroup.id, true);
+}
+
+function pickGroup(id, silent) {
+  currentGroup = groups.find(g => g.id === id);
+  document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.textContent === currentGroup.name));
+  $('renameGroupBtn').dataset.id = id;
+  $('stSearch').value = '';
+  $('studentsTitle').textContent = 'التلاميذ: ' + currentGroup.name;
+  loadStudents();
+}
+
+$('renameGroupBtn').onclick = async () => {
+  const name = $('groupRename').value.trim();
+  if (!name) return say('groupMsg', 'اكتب الاسم الجديد.', false);
+  const { error } = await sb.from('school_groups').update({ name }).eq('id', currentGroup.id);
+  if (error) return say('groupMsg', 'لم يُحفظ الاسم: ' + error.message, false);
+  $('groupRename').value = '';
+  say('groupMsg', 'تم تغيير اسم الفوج.', true);
+  await loadGroups();
+};
+
+// ---------- التلاميذ ----------
+async function loadStudents() {
+  if (!currentGroup) return;
+  const { data, error } = await sb.from('students')
+    .select('id,list_number,first_name,last_name,birth_date,sex,status')
+    .eq('group_id', currentGroup.id)
+    .order('list_number');
+  if (error) return say('studentMsg', 'تعذر تحميل التلاميذ: ' + error.message, false);
+  window._students = data;
+  renderStudents();
+}
+
+function renderStudents() {
+  const q = $('stSearch').value.trim();
+  const list = (window._students || []).filter(s => !q || (s.first_name + ' ' + s.last_name).includes(q));
+  $('studentList').innerHTML = list.length
+    ? `<table><tr><th>الرقم</th><th>الاسم واللقب</th><th>الميلاد</th><th>الجنس</th><th>الحالة</th><th></th></tr>` +
+      list.map(s => `<tr>
+        <td>${s.list_number}</td>
+        <td>${esc(s.first_name)} ${esc(s.last_name)}</td>
+        <td>${esc(s.birth_date)}</td>
+        <td>${esc(s.sex)}</td>
+        <td>${esc(s.status)}</td>
+        <td>
+          <button class="small secondary" onclick="toggleArchive('${s.id}','${s.status}')">${s.status === 'مسجل' ? 'أرشفة' : 'استرجاع'}</button>
+          <button class="small danger" onclick="removeStudent('${s.id}')">حذف</button>
+        </td>
+      </tr>`).join('') + '</table>'
+    : '<p class="note">لا يوجد تلاميذ في هذا الفوج بعد.</p>';
+}
+
+$('stSearch').oninput = renderStudents;
+
+$('addStudentBtn').onclick = async () => {
+  const first = $('stFirst').value.trim(), last = $('stLast').value.trim(), birth = $('stBirth').value, sex = $('stSex').value;
+  if (!currentGroup) return say('studentMsg', 'اختر فوجًا أولًا.', false);
+  if (!first || !last || !birth) return say('studentMsg', 'الاسم واللقب وتاريخ الميلاد مطلوبة.', false);
+
+  const nextNo = (window._students || []).reduce((m, s) => Math.max(m, s.list_number), 0) + 1;
+  const { error } = await sb.from('students').insert({
+    school_id: currentSchool.id,
+    group_id: currentGroup.id,
+    list_number: nextNo,
+    first_name: first,
+    last_name: last,
+    birth_date: birth,
+    sex: sex
+  });
+  if (error) {
+    const dup = error.message.includes('duplicate') || error.message.includes('unique');
+    return say('studentMsg', dup ? 'رقم الترتيب مكرر في هذا الفوج، أعد المحاولة.' : 'لم يُحفظ التلميذ: ' + error.message, false);
+  }
+  $('stFirst').value = ''; $('stLast').value = ''; $('stBirth').value = '';
+  say('studentMsg', 'تمت إضافة التلميذ بنجاح.', true);
+  loadStudents();
+};
+
+async function toggleArchive(id, status) {
+  const next = status === 'مسجل' ? 'مؤرشف' : 'مسجل';
+  const { error } = await sb.from('students').update({ status: next }).eq('id', id);
+  if (error) return say('studentMsg', 'لم يُحفظ التغيير: ' + error.message, false);
+  say('studentMsg', next === 'مؤرشف' ? 'تمت أرشفة التلميذ.' : 'تم استرجاع التلميذ.', true);
+  loadStudents();
+}
+
+async function removeStudent(id) {
+  if (!confirm('حذف هذا التلميذ نهائيًا مع علاماته وغياباته؟')) return;
+  const { error } = await sb.from('students').delete().eq('id', id);
+  if (error) return say('studentMsg', 'تعذر الحذف: ' + error.message, false);
+  say('studentMsg', 'تم الحذف.', true);
+  loadStudents();
 }
 </script>
 </body>
