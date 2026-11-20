@@ -4,9 +4,158 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>منصة تسيير الطور المتوسط</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  body{font-family:Tahoma,Arial,sans-serif;background:#f3f6f5;color:#1c2b28;margin:0;padding:16px}
+  .card{background:#fff;border:1px solid #d6e0dd;border-radius:12px;padding:18px;max-width:520px;margin:0 auto 16px}
+  h1{font-size:20px;text-align:center;color:#1d5c4d;margin:0 0 10px}
+  label{display:block;margin:10px 0 4px;font-size:14px}
+  input{width:100%;padding:10px;border:1px solid #bccbc7;border-radius:8px;font-size:15px;box-sizing:border-box}
+  button{width:100%;padding:11px;margin-top:10px;border:0;border-radius:8px;background:#1d5c4d;color:#fff;font-size:15px;cursor:pointer}
+  button.secondary{background:#e2efeb;color:#1d5c4d}
+  button.danger{background:#a8322a;width:auto;margin:0;padding:5px 10px;font-size:13px}
+  .msg{margin-top:10px;font-size:14px;text-align:center;min-height:20px}
+  .ok{color:#1d5c4d}.err{color:#a8322a}
+  .row{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #eef2f1;padding:8px 0;gap:8px}
+  .hidden{display:none}
+  .note{font-size:13px;color:#5d6f6a}
+</style>
 </head>
-<body style="font-family: Tahoma, Arial, sans-serif; padding: 24px;">
-<h1>الموقع يعمل</h1>
-<p>هذه صفحة اختبار للنشر. سنضيف تسجيل الدخول وقاعدة البيانات في الخطوات التالية.</p>
+<body>
+
+<div class="card" id="authBox">
+  <h1>منصة تسيير الطور المتوسط</h1>
+  <label>البريد الإلكتروني</label>
+  <input id="email" type="email" autocomplete="email">
+  <label>كلمة المرور</label>
+  <input id="password" type="password" autocomplete="current-password">
+  <button id="loginBtn">تسجيل الدخول</button>
+  <button id="signupBtn" class="secondary">إنشاء حساب جديد</button>
+  <button id="resetBtn" class="secondary">نسيت كلمة المرور؟</button>
+  <div id="authMsg" class="msg"></div>
+</div>
+
+<div id="appBox" class="hidden">
+  <div class="card">
+    <div class="row">
+      <span id="who"></span>
+      <button id="logoutBtn" class="secondary" style="width:auto;margin:0;padding:6px 12px">خروج</button>
+    </div>
+    <div id="adminBadge" class="note hidden">حساب مدير المنصة</div>
+  </div>
+
+  <div class="card">
+    <h1>مؤسساتي</h1>
+    <label>اسم المؤسسة</label>
+    <input id="schoolName">
+    <label>السنة الدراسية</label>
+    <input id="schoolYear" value="2026/2027">
+    <button id="addSchoolBtn">إضافة مؤسسة</button>
+    <div id="schoolMsg" class="msg"></div>
+    <div id="schoolList"></div>
+  </div>
+
+  <div class="card">
+    <h1>تغيير كلمة المرور</h1>
+    <label>كلمة المرور الجديدة (12 حرفًا على الأقل)</label>
+    <input id="newPass" type="password" autocomplete="new-password">
+    <button id="changePassBtn" class="secondary">حفظ كلمة المرور الجديدة</button>
+    <div id="passMsg" class="msg"></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://iinvgzodswraihccsqxn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_i5QGzqapRHZ0Imo-Znn71A_9stftNlc';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const say = (id, text, ok) => { const el = $(id); el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
+const redirectUrl = () => location.origin + location.pathname;
+
+let recovering = false;
+
+// ---------- تسجيل الدخول والإنشاء والاستعادة ----------
+$('signupBtn').onclick = async () => {
+  const email = $('email').value.trim(), password = $('password').value;
+  if (!email || password.length < 12) return say('authMsg', 'اكتب بريدًا صحيحًا وكلمة مرور من 12 حرفًا على الأقل.', false);
+  const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl() } });
+  if (error) return say('authMsg', 'تعذر إنشاء الحساب: ' + error.message, false);
+  say('authMsg', 'تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.', true);
+  $('loginBtn').onclick = async () => {
+  const { error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
+  if (error) say('authMsg', 'تعذر تسجيل الدخول: ' + error.message, false);
+};
+
+$('resetBtn').onclick = async () => {
+  const email = $('email').value.trim();
+  if (!email) return say('authMsg', 'اكتب بريدك أولًا.', false);
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl() });
+  if (error) say('authMsg', 'تعذر إرسال الرابط: ' + error.message, false);
+  else say('authMsg', 'أُرسل رابط استعادة كلمة المرور إلى بريدك، إن كان الحساب موجودًا.', true);
+};
+
+$('logoutBtn').onclick = async () => { await sb.auth.signOut(); };
+
+$('changePassBtn').onclick = async () => {
+  const p = $('newPass').value;
+  if (p.length < 12) return say('passMsg', 'كلمة المرور يجب أن تكون 12 حرفًا على الأقل.', false);
+  const { error } = await sb.auth.updateUser({ password: p });
+  if (error) return say('passMsg', 'لم تُحفظ كلمة المرور: ' + error.message, false);
+  $('newPass').value = '';
+  recovering = false;
+  say('passMsg', 'تم تغيير كلمة المرور بنجاح.', true);
+};
+
+// ---------- حالة الدخول ----------
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'PASSWORD_RECOVERY') recovering = true;
+  // نؤجل العمليات لتفادي تعارض داخل المكتبة
+  setTimeout(() => {
+    if (session) showApp(session.user);
+    else { $('authBox').classList.remove('hidden'); $('appBox').classList.add('hidden'); }
+  }, 0);
+});
+
+async function showApp(user) {
+  $('authBox').classList.add('hidden');
+  $('appBox').classList.remove('hidden');
+  $('password').value = '';
+  $('who').textContent = 'مرحبًا، ' + user.email;
+  const { data: adm } = await sb.from('admins').select('user_id').eq('user_id', user.id);
+  $('adminBadge').classList.toggle('hidden', !(adm && adm.length));
+  if (recovering) say('passMsg', 'أدخل كلمة المرور الجديدة ثم احفظها.', true);
+  loadSchools();
+}
+
+// ---------- المؤسسات ----------
+async function loadSchools() {
+  const { data, error } = await sb.from('schools').select('id,name,school_year').order('created_at', { ascending: false });
+  if (error) return say('schoolMsg', 'تعذر تحميل المؤسسات: ' + error.message, false);
+  $('schoolList').innerHTML = data.length
+    ? data.map(s => <div class="row"><span>${esc(s.name)} <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>).join('')
+    : '<p class="note">لا توجد مؤسسات بعد.</p>';
+}
+
+$('addSchoolBtn').onclick = async () => {
+  const name = $('schoolName').value.trim(), year = $('schoolYear').value.trim();
+  if (!name) return say('schoolMsg', 'اكتب اسم المؤسسة.', false);
+  const { error } = await sb.from('schools').insert({ name, school_year: year });
+  if (error) return say('schoolMsg', 'لم تُحفظ المؤسسة: ' + error.message, false);
+  $('schoolName').value = '';
+  say('schoolMsg', 'تم حفظ المؤسسة بنجاح.', true);
+  loadSchools();
+};
+
+async function removeSchool(id) {
+  if (!confirm('حذف هذه المؤسسة مع كل أفواجها وتلاميذها وعلاماتها؟')) return;
+  const { error } = await sb.from('schools').delete().eq('id', id);
+  if (error) return say('schoolMsg', 'تعذر الحذف: ' + error.message, false);
+  say('schoolMsg', 'تم الحذف.', true);
+  loadSchools();
+}
+</script>
 </body>
 </html>
+};
