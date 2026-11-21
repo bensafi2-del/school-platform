@@ -7,11 +7,11 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 body{font-family:Tahoma,Arial,sans-serif;background:#f3f6f5;color:#1c2b28;margin:0;padding:16px}
-.card{background:#fff;border:1px solid #d6e0dd;border-radius:12px;padding:18px;max-width:640px;margin:0 auto 16px}
+.card{background:#fff;border:1px solid #d6e0dd;border-radius:12px;padding:18px;max-width:700px;margin:0 auto 16px}
 h1{font-size:20px;text-align:center;color:#1d5c4d;margin:0 0 10px}
 h2{font-size:17px;color:#1d5c4d;margin:16px 0 8px}
 label{display:block;margin:10px 0 4px;font-size:14px}
-input,select{width:100%;padding:10px;border:1px solid #bccbc7;border-radius:8px;font-size:15px;box-sizing:border-box;background:#fff}
+input,select,textarea{width:100%;padding:10px;border:1px solid #bccbc7;border-radius:8px;font-size:15px;box-sizing:border-box;background:#fff}
 button{width:100%;padding:11px;margin-top:10px;border:0;border-radius:8px;background:#1d5c4d;color:#fff;font-size:15px;cursor:pointer}
 button.secondary{background:#e2efeb;color:#1d5c4d}
 button.danger{background:#a8322a;width:auto;margin:0;padding:5px 10px;font-size:13px}
@@ -33,11 +33,20 @@ th,td{padding:7px;border-bottom:1px solid #eef2f1;text-align:right;vertical-alig
 th{background:#e2efeb;color:#1d5c4d}
 td input{width:76px;padding:6px}
 td input.wide{width:150px}
-@media (max-width:520px){.grid{grid-template-columns:1fr}}
+.warn{background:#fff8e1;border:1px solid #f9a825;border-radius:8px;padding:8px 12px;font-size:13px;color:#5a3e00;margin:4px 0}
+.strow{cursor:pointer}
+.strow:hover td{background:#f0f8f5}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{position:fixed;top:0;right:0;left:0;background:#fff;padding:20px;z-index:9999}
+}
 </style>
 </head>
 <body>
 
+<!-- شاشة تسجيل الدخول -->
 <div class="card" id="authBox">
 <h1>منصة تسيير الطور المتوسط</h1>
 <label>البريد الإلكتروني</label>
@@ -50,26 +59,28 @@ td input.wide{width:150px}
 <div id="authMsg" class="msg"></div>
 </div>
 
+<!-- التطبيق الرئيسي -->
 <div id="appBox" class="hidden">
+
+<!-- الرأس -->
 <div class="card">
 <div class="row"><span id="who"></span><button id="logoutBtn" class="secondary small">خروج</button></div>
 <div id="adminBadge" class="note hidden">حساب مدير المنصة</div>
 </div>
 
+<!-- قائمة المؤسسات -->
 <div class="card" id="schoolsCard">
 <h1>مؤسساتي</h1>
-<label>اسم المؤسسة</label>
-<input id="schoolName">
-<label>السنة الدراسية</label>
-<input id="schoolYear" value="2026/2027">
+<label>اسم المؤسسة</label><input id="schoolName">
+<label>السنة الدراسية</label><input id="schoolYear" value="2026/2027">
 <button id="addSchoolBtn">إضافة مؤسسة</button>
 <div id="schoolMsg" class="msg"></div>
 <div id="schoolList"></div>
 </div>
 
+<!-- تفاصيل المؤسسة: الأفواج والتبويبات -->
 <div class="card hidden" id="detailCard">
-<div class="row"><h2 id="detailTitle" style="margin:0"></h2><button id="backBtn" class="secondary small">رجوع</button></div>
-
+<div class="row"><h2 id="detailTitle" style="margin:0"></h2><button id="backBtn" class="secondary small">رجوع للمؤسسات</button></div>
 <h2>الأفواج</h2>
 <div class="chips" id="groupChips"></div>
 <div class="row" style="margin-top:8px">
@@ -77,13 +88,12 @@ td input.wide{width:150px}
 <button id="renameGroupBtn" class="secondary small">حفظ الاسم</button>
 </div>
 <div id="groupMsg" class="msg"></div>
-
 <div class="chips">
 <button class="tab on" data-s="Students" onclick="showSec('Students')">التلاميذ</button>
-<button class="tab" data-s="Grades" onclick="showSec('Grades')">العلامات</button>
 <button class="tab" data-s="Subjects" onclick="showSec('Subjects')">المواد والأوزان</button>
 </div>
 
+<!-- قائمة التلاميذ -->
 <div id="secStudents">
 <h2 id="studentsTitle">التلاميذ</h2>
 <div class="grid">
@@ -96,18 +106,11 @@ td input.wide{width:150px}
 <div id="studentMsg" class="msg"></div>
 <label>بحث بالاسم أو اللقب</label>
 <input id="stSearch" placeholder="اكتب للبحث">
+<p class="note" style="margin-top:8px">اضغط على اسم التلميذ لفتح صفحته الكاملة.</p>
 <div id="studentList"></div>
 </div>
 
-<div id="secGrades" class="hidden">
-<h2>العلامات</h2>
-<p class="note">العلامات من 0 إلى 20، وتُحفظ عند تغييرها. المعدلات تقديرية حتى تُضبط الأوزان والمعاملات.</p>
-<label>المادة</label>
-<select id="gSub" onchange="curSub=this.value;renderGrades()"></select>
-<div id="gradeTable"></div>
-<div id="gradeMsg" class="msg"></div>
-</div>
-
+<!-- المواد والأوزان -->
 <div id="secSubjects" class="hidden">
 <h2>المواد والمعاملات</h2>
 <p class="note">المعاملات الافتراضية 1 وهي غير رسمية. عدّلها يدويًا وفق التنظيم المعتمد لكل مستوى.</p>
@@ -123,7 +126,6 @@ td input.wide{width:150px}
 <button id="addSubBtn">إضافة مادة</button>
 <button id="addProposedBtn" class="secondary">إضافة القائمة المقترحة بمعامل 1</button>
 <div id="subMsg" class="msg"></div>
-
 <h2>الأوزان وحد الغياب</h2>
 <div class="grid">
 <label>وزن التقويم المستمر<input id="wcc" type="number" min="0" step="0.5"></label>
@@ -132,12 +134,93 @@ td input.wide{width:150px}
 <label>وزن الاختبار<input id="wex" type="number" min="0" step="0.5"></label>
 <label>حد تنبيه الغيابات<input id="wlim" type="number" min="1"></label>
 </div>
-<p class="note">هذه الأوزان مؤقتة وليست صيغة رسمية. عدّلها وفق النص المعتمد.</p>
+<p class="note">هذه الأوزان مؤقتة وليست صيغة رسمية.</p>
 <button id="saveWeightsBtn" class="secondary">حفظ الأوزان</button>
 <div id="wMsg" class="msg"></div>
 </div>
 </div>
 
+<!-- صفحة التلميذ الكاملة -->
+<div class="card hidden" id="studentCard">
+<div class="row">
+<h2 id="stDetailName" style="margin:0"></h2>
+<button id="backToGroupBtn" class="secondary small">رجوع للفوج</button>
+</div>
+
+<!-- تبويبات صفحة التلميذ -->
+<div class="chips">
+<button class="tab on" data-t="info" onclick="showStTab('info')">المعلومات</button>
+<button class="tab" data-t="grades" onclick="showStTab('grades')">العلامات والمعدل</button>
+<button class="tab" data-t="abs" onclick="showStTab('abs')">الغيابات والتأخرات</button>
+<button class="tab" data-t="report" onclick="showStTab('report')">كشف النقاط</button>
+</div>
+
+<!-- المعلومات -->
+<div id="stTabInfo">
+<div class="grid" style="margin-top:10px">
+<div><label>الاسم</label><input id="stEditFirst"></div>
+<div><label>اللقب</label><input id="stEditLast"></div>
+<div><label>تاريخ الميلاد</label><input id="stEditBirth" type="date"></div>
+<div><label>الجنس</label><select id="stEditSex"><option>ذكر</option><option>أنثى</option></select></div>
+<div><label>اسم ولي الأمر</label><input id="stEditGuardian"></div>
+<div><label>رقم الاتصال</label><input id="stEditPhone"></div>
+</div>
+<label>ملاحظات إدارية</label>
+<textarea id="stEditNotes" rows="2"></textarea>
+<button id="saveStInfoBtn">حفظ المعلومات</button>
+<div id="stInfoMsg" class="msg"></div>
+</div>
+
+<!-- العلامات -->
+<div id="stTabGrades" class="hidden">
+<p class="note">العلامات من 0 إلى 20، وتُحفظ عند تغييرها.</p>
+<div id="stGradeTable"></div>
+<div id="stGradeMsg" class="msg"></div>
+</div>
+
+<!-- الغيابات -->
+<div id="stTabAbs" class="hidden">
+<div id="stAbsWarn"></div>
+<h2>تسجيل غياب أو تأخر</h2>
+<div class="grid">
+<div><label>النوع</label><select id="absKind"><option>غياب</option><option>تأخر</option></select></div>
+<div><label>التاريخ</label><input id="absDate" type="date"></div>
+<div><label>المادة</label><select id="absSub"></select></div>
+<div><label>مبرر؟</label><select id="absJust"><option value="0">لا</option><option value="1">نعم</option></select></div>
+<div><label>دقائق التأخر</label><input id="absMin" type="number" min="0" value="0"></div>
+<div><label>السبب</label><input id="absReason" placeholder="اختياري"></div>
+</div>
+<button id="addAbsBtn">تسجيل</button>
+<div id="absMsg" class="msg"></div>
+<h2>سجل الغيابات والتأخرات</h2>
+<div id="absList"></div>
+</div>
+
+<!-- كشف النقاط -->
+<div id="stTabReport" class="hidden">
+<div id="printArea">
+<div style="text-align:center;margin-bottom:10px">
+<b>الجمهورية الجزائرية الديمقراطية الشعبية</b><br>
+<span id="rpSchool" class="note"></span>
+</div>
+<div class="grid" style="margin-bottom:10px">
+<div><b>التلميذ:</b> <span id="rpName"></span></div>
+<div><b>الفوج:</b> <span id="rpGroup"></span></div>
+<div><b>المستوى:</b> <span id="rpLevel"></span></div>
+<div><b>السنة الدراسية:</b> <span id="rpYear"></span></div>
+</div>
+<div id="rpTable"></div>
+<div style="margin-top:12px"><b>المعدل العام: <span id="rpAvg"></span> / 20</b></div>
+<div style="margin-top:8px"><b>عدد الغيابات: <span id="rpAbs"></span></b></div>
+<label style="margin-top:10px">ملاحظات مجلس القسم</label>
+<textarea id="rpRemarks" rows="2" onchange="saveRemarks(this.value)"></textarea>
+<p class="note" style="margin-top:8px">نموذج غير رسمي، يجب مطابقته للنموذج المعتمد قبل الاستعمال.</p>
+</div>
+<button onclick="window.print()" style="margin-top:10px">طباعة كشف النقاط</button>
+</div>
+</div>
+
+<!-- تغيير كلمة المرور -->
 <div class="card">
 <h1>تغيير كلمة المرور</h1>
 <label>كلمة المرور الجديدة (12 حرفًا على الأقل)</label>
@@ -153,403 +236,430 @@ const SUPABASE_KEY = 'sb_publishable_i5QGzqapRHZ0Imo-Znn71A_9stftNlc';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const say = (id, text, ok) => { const el = $(id); el.textContent = text; el.className = 'msg ' + (ok ? 'ok' : 'err'); };
-const redirectUrl = () => location.origin + location.pathname;
-const n = v => v == null ? null : Number(v);
-const f2 = v => v == null ? '—' : v.toFixed(2);
-const CC = ['cc', 'f1', 'f2', 'ex'];
+const esc = s => String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const say = (id,text,ok) => { const el=$(id); el.textContent=text; el.className='msg '+(ok?'ok':'err'); };
+const redirectUrl = () => location.origin+location.pathname;
+const n = v => v==null?null:Number(v);
+const f2 = v => v==null?'—':v.toFixed(2);
+const CC = ['cc','f1','f2','ex'];
+const CCN = {cc:'التقويم المستمر',f1:'الفرض الأول',f2:'الفرض الثاني',ex:'الاختبار'};
+const LVN = ['','السنة الأولى متوسط','السنة الثانية متوسط','السنة الثالثة متوسط','السنة الرابعة متوسط'];
 const PROPOSED = ['اللغة العربية','الرياضيات','اللغة الفرنسية','اللغة الإنجليزية','العلوم الطبيعية','العلوم الفيزيائية والتكنولوجيا','التاريخ والجغرافيا','التربية الإسلامية','التربية المدنية','الإعلام الآلي','التربية الفنية','التربية البدنية والرياضية'];
 
-let recovering = false, currentSchool = null, sch = null, groups = [], currentGroup = null, SUBS = [], G = {}, curSub = null;
+let recovering=false, currentSchool=null, sch=null, groups=[], currentGroup=null, SUBS=[], G={}, currentStudent=null;
 
 // ---------- المصادقة ----------
 $('signupBtn').onclick = async () => {
-  const email = $('email').value.trim(), password = $('password').value;
-  if (!email || password.length < 12) return say('authMsg', 'اكتب بريدًا صحيحًا وكلمة مرور من 12 حرفًا على الأقل.', false);
-  const { error } = await sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectUrl() } });
-  if (error) return say('authMsg', 'تعذر إنشاء الحساب: ' + error.message, false);
-  say('authMsg', 'تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.', true);
+  const email=$('email').value.trim(), password=$('password').value;
+  if(!email||password.length<12) return say('authMsg','اكتب بريدًا صحيحًا وكلمة مرور من 12 حرفًا على الأقل.',false);
+  const {error} = await sb.auth.signUp({email,password,options:{emailRedirectTo:redirectUrl()}});
+  if(error) return say('authMsg','تعذر إنشاء الحساب: '+error.message,false);
+  say('authMsg','تم إنشاء الحساب. افتح بريدك واضغط رابط التأكيد، ثم سجّل الدخول.',true);
 };
 $('loginBtn').onclick = async () => {
-  const { error } = await sb.auth.signInWithPassword({ email: $('email').value.trim(), password: $('password').value });
-  if (error) say('authMsg', 'تعذر تسجيل الدخول: ' + error.message, false);
+  const {error} = await sb.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});
+  if(error) say('authMsg','تعذر تسجيل الدخول: '+error.message,false);
 };
 $('resetBtn').onclick = async () => {
-  const email = $('email').value.trim();
-  if (!email) return say('authMsg', 'اكتب بريدك أولًا.', false);
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirectUrl() });
-  if (error) say('authMsg', 'تعذر إرسال الرابط: ' + error.message, false);
-  else say('authMsg', 'أُرسل رابط استعادة كلمة المرور إلى بريدك، إن كان الحساب موجودًا.', true);
+  const email=$('email').value.trim();
+  if(!email) return say('authMsg','اكتب بريدك أولًا.',false);
+  const {error} = await sb.auth.resetPasswordForEmail(email,{redirectTo:redirectUrl()});
+  if(error) say('authMsg','تعذر إرسال الرابط: '+error.message,false);
+  else say('authMsg','أُرسل رابط استعادة كلمة المرور إلى بريدك، إن كان الحساب موجودًا.',true);
 };
 $('logoutBtn').onclick = async () => { await sb.auth.signOut(); };
 $('changePassBtn').onclick = async () => {
-  const p = $('newPass').value;
-  if (p.length < 12) return say('passMsg', 'كلمة المرور يجب أن تكون 12 حرفًا على الأقل.', false);
-  const { error } = await sb.auth.updateUser({ password: p });
-  if (error) return say('passMsg', 'لم تُحفظ كلمة المرور: ' + error.message, false);
-  $('newPass').value = '';
-  recovering = false;
-  say('passMsg', 'تم تغيير كلمة المرور بنجاح.', true);
+  const p=$('newPass').value;
+  if(p.length<12) return say('passMsg','كلمة المرور يجب أن تكون 12 حرفًا على الأقل.',false);
+  const {error} = await sb.auth.updateUser({password:p});
+  if(error) return say('passMsg','لم تُحفظ كلمة المرور: '+error.message,false);
+  $('newPass').value=''; recovering=false;
+  say('passMsg','تم تغيير كلمة المرور بنجاح.',true);
 };
-
-sb.auth.onAuthStateChange((event, session) => {
-  if (event === 'PASSWORD_RECOVERY') recovering = true;
+sb.auth.onAuthStateChange((event,session) => {
+  if(event==='PASSWORD_RECOVERY') recovering=true;
   setTimeout(() => {
-    if (session) showApp(session.user);
+    if(session) showApp(session.user);
     else { $('authBox').classList.remove('hidden'); $('appBox').classList.add('hidden'); }
-  }, 0);
+  },0);
 });
-
 async function showApp(user) {
   $('authBox').classList.add('hidden');
   $('appBox').classList.remove('hidden');
-  $('password').value = '';
-  $('who').textContent = 'مرحبًا، ' + user.email;
-  const { data: adm } = await sb.from('admins').select('user_id').eq('user_id', user.id);
-  $('adminBadge').classList.toggle('hidden', !(adm && adm.length));
-  if (recovering) say('passMsg', 'أدخل كلمة المرور الجديدة ثم احفظها.', true);
-  showSchoolsList();
-  loadSchools();
+  $('password').value='';
+  $('who').textContent='مرحبًا، '+user.email;
+  const {data:adm} = await sb.from('admins').select('user_id').eq('user_id',user.id);
+  $('adminBadge').classList.toggle('hidden',!(adm&&adm.length));
+  if(recovering) say('passMsg','أدخل كلمة المرور الجديدة ثم احفظها.',true);
+  showSchoolsList(); loadSchools();
 }
 
 // ---------- المؤسسات ----------
 function showSchoolsList() {
   $('detailCard').classList.add('hidden');
+  $('studentCard').classList.add('hidden');
   $('schoolsCard').classList.remove('hidden');
-  currentSchool = null;
+  currentSchool=null;
 }
-
 async function loadSchools() {
-  const { data, error } = await sb.from('schools').select('id,name,school_year').order('created_at', { ascending: false });
-  if (error) return say('schoolMsg', 'تعذر تحميل المؤسسات: ' + error.message, false);
+  const {data,error} = await sb.from('schools').select('id,name,school_year').order('created_at',{ascending:false});
+  if(error) return say('schoolMsg','تعذر تحميل المؤسسات: '+error.message,false);
   $('schoolList').innerHTML = data.length
-    ? data.map(s => `<div class="row"><span><a href="#" class="sl" data-id="${s.id}" data-name="${esc(s.name)}">${esc(s.name)}</a> <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>`).join('')
+    ? data.map(s=>`<div class="row"><span><a href="#" class="sl" data-id="${s.id}" data-name="${esc(s.name)}">${esc(s.name)}</a> <span class="note">(${esc(s.school_year)})</span></span><button class="danger" onclick="removeSchool('${s.id}')">حذف</button></div>`).join('')
     : '<p class="note">لا توجد مؤسسات بعد.</p>';
 }
 $('schoolList').onclick = e => {
-  const a = e.target.closest('.sl');
-  if (a) { e.preventDefault(); openSchool(a.dataset.id, a.dataset.name); }
+  const a=e.target.closest('.sl');
+  if(a){e.preventDefault();openSchool(a.dataset.id,a.dataset.name);}
 };
-
 $('addSchoolBtn').onclick = async () => {
-  const name = $('schoolName').value.trim(), year = $('schoolYear').value.trim();
-  if (!name) return say('schoolMsg', 'اكتب اسم المؤسسة.', false);
-  const { error } = await sb.from('schools').insert({ name, school_year: year });
-  if (error) return say('schoolMsg', 'لم تُحفظ المؤسسة: ' + error.message, false);
-  $('schoolName').value = '';
-  say('schoolMsg', 'تم حفظ المؤسسة بنجاح.', true);
+  const name=$('schoolName').value.trim(), year=$('schoolYear').value.trim();
+  if(!name) return say('schoolMsg','اكتب اسم المؤسسة.',false);
+  const {error} = await sb.from('schools').insert({name,school_year:year});
+  if(error) return say('schoolMsg','لم تُحفظ المؤسسة: '+error.message,false);
+  $('schoolName').value='';
+  say('schoolMsg','تم حفظ المؤسسة بنجاح.',true);
   loadSchools();
 };
-
 async function removeSchool(id) {
-  if (!confirm('حذف هذه المؤسسة مع كل أفواجها وتلاميذها وعلاماتها؟')) return;
-  const { error } = await sb.from('schools').delete().eq('id', id);
-  if (error) return say('schoolMsg', 'تعذر الحذف: ' + error.message, false);
-  say('schoolMsg', 'تم الحذف.', true);
-  loadSchools();
+  if(!confirm('حذف هذه المؤسسة مع كل أفواجها وتلاميذها وعلاماتها؟')) return;
+  const {error} = await sb.from('schools').delete().eq('id',id);
+  if(error) return say('schoolMsg','تعذر الحذف: '+error.message,false);
+  say('schoolMsg','تم الحذف.',true); loadSchools();
 }
-
-async function openSchool(id, name) {
-  currentSchool = { id, name };
-  currentGroup = null; curSub = null;
+async function openSchool(id,name) {
+  currentSchool={id,name}; currentGroup=null;
   $('schoolsCard').classList.add('hidden');
+  $('studentCard').classList.add('hidden');
   $('detailCard').classList.remove('hidden');
-  $('detailTitle').textContent = name;
+  $('detailTitle').textContent=name;
   showSec('Students');
-  const { data, error } = await sb.from('schools').select('*').eq('id', id).single();
-  if (error) return say('schoolMsg', 'تعذر فتح المؤسسة: ' + error.message, false);
-  sch = data;
-  $('wcc').value = sch.weight_cc; $('wf1').value = sch.weight_f1;
-  $('wf2').value = sch.weight_f2; $('wex').value = sch.weight_ex;
-  $('wlim').value = sch.absence_limit;
-  await loadSubjects();
-  await loadGroups();
+  const {data,error} = await sb.from('schools').select('*').eq('id',id).single();
+  if(error) return say('schoolMsg','تعذر فتح المؤسسة: '+error.message,false);
+  sch=data;
+  $('wcc').value=sch.weight_cc; $('wf1').value=sch.weight_f1;
+  $('wf2').value=sch.weight_f2; $('wex').value=sch.weight_ex;
+  $('wlim').value=sch.absence_limit;
+  await loadSubjects(); await loadGroups();
 }
 $('backBtn').onclick = () => { showSchoolsList(); loadSchools(); };
-
 function showSec(name) {
-  ['Students', 'Grades', 'Subjects'].forEach(x => $('sec' + x).classList.toggle('hidden', x !== name));
-  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('on', b.dataset.s === name));
-  if (name === 'Grades') renderGrades();
+  ['Students','Subjects'].forEach(x=>$('sec'+x).classList.toggle('hidden',x!==name));
+  document.querySelectorAll('.tab[data-s]').forEach(b=>b.classList.toggle('on',b.dataset.s===name));
 }
 
-// ---------- المواد والأوزان ----------
+// ---------- المواد ----------
 async function loadSubjects() {
-  const { data, error } = await sb.from('subjects').select('id,name,coef,teacher_name,levels,sort_order').eq('school_id', currentSchool.id).order('sort_order');
-  if (error) return say('subMsg', 'تعذر تحميل المواد: ' + error.message, false);
-  SUBS = data.map(s => ({ ...s, coef: Number(s.coef) }));
+  const {data,error} = await sb.from('subjects').select('id,name,coef,teacher_name,levels,sort_order').eq('school_id',currentSchool.id).order('sort_order');
+  if(error) return say('subMsg','تعذر تحميل المواد: '+error.message,false);
+  SUBS=data.map(s=>({...s,coef:Number(s.coef)}));
   renderSubjects();
-  renderGrades();
 }
-
 function renderSubjects() {
-  $('subRows').innerHTML = SUBS.map(s => `<tr>
+  $('subRows').innerHTML=SUBS.map(s=>`<tr>
 <td><input class="wide" value="${esc(s.name)}" onchange="subUpd('${s.id}',{name:this.value.trim()})"></td>
 <td><input type="number" min="0" step="0.5" value="${s.coef}" onchange="subUpd('${s.id}',{coef:Math.max(0,Number(this.value)||0)})"></td>
-<td><input class="wide" value="${esc(s.teacher_name || '')}" onchange="subUpd('${s.id}',{teacher_name:this.value.trim()})"></td>
-<td>${[1,2,3,4].map(l => `<label class="inl"><input type="checkbox" ${s.levels.includes(l) ? 'checked' : ''} onchange="subLevel('${s.id}',${l},this.checked)">م${l}</label>`).join('')}</td>
+<td><input class="wide" value="${esc(s.teacher_name||'')}" onchange="subUpd('${s.id}',{teacher_name:this.value.trim()})"></td>
+<td>${[1,2,3,4].map(l=>`<label class="inl"><input type="checkbox" ${s.levels.includes(l)?'checked':''} onchange="subLevel('${s.id}',${l},this.checked)">م${l}</label>`).join('')}</td>
 <td><button class="danger" onclick="subDel('${s.id}')">حذف</button></td>
-</tr>`).join('') || '<tr><td colspan="5" class="note">لا توجد مواد بعد.</td></tr>';
+</tr>`).join('')||'<tr><td colspan="5" class="note">لا توجد مواد بعد.</td></tr>';
 }
-
-async function subUpd(id, patch) {
-  const { error } = await sb.from('subjects').update(patch).eq('id', id).select().single();
-  if (error) return say('subMsg', 'لم يُحفظ: ' + error.message, false);
-  say('subMsg', 'تم الحفظ.', true);
-  await loadSubjects();
+async function subUpd(id,patch) {
+  const {error}=await sb.from('subjects').update(patch).eq('id',id).select().single();
+  if(error) return say('subMsg','لم يُحفظ: '+error.message,false);
+  say('subMsg','تم الحفظ.',true); await loadSubjects();
 }
-
-function subLevel(id, l, on) {
-  const s = SUBS.find(x => x.id === id);
-  const lv = on ? [...new Set([...s.levels, l])].sort() : s.levels.filter(x => x !== l);
-  subUpd(id, { levels: lv });
+function subLevel(id,l,on) {
+  const s=SUBS.find(x=>x.id===id);
+  const lv=on?[...new Set([...s.levels,l])].sort():s.levels.filter(x=>x!==l);
+  subUpd(id,{levels:lv});
 }
-
 async function subDel(id) {
-  if (!confirm('حذف المادة وكل علاماتها؟')) return;
-  const { error } = await sb.from('subjects').delete().eq('id', id);
-  if (error) return say('subMsg', 'تعذر الحذف: ' + error.message, false);
-  say('subMsg', 'تم الحذف.', true);
-  await loadSubjects();
+  if(!confirm('حذف المادة وكل علاماتها؟')) return;
+  const {error}=await sb.from('subjects').delete().eq('id',id);
+  if(error) return say('subMsg','تعذر الحذف: '+error.message,false);
+  say('subMsg','تم الحذف.',true); await loadSubjects();
 }
-
 async function addSubject() {
-  if (!currentSchool) return;
-  const name = $('nSub').value.trim();
-  if (!name) return say('subMsg', 'اكتب اسم المادة.', false);
-  const { error } = await sb.from('subjects').insert({
-    school_id: currentSchool.id, name,
-    coef: Math.max(0, Number($('nCoef').value) || 0),
-    teacher_name: $('nTeacher').value.trim(),
-    sort_order: SUBS.length + 1
-  }).select().single();
-  if (error) return say('subMsg', 'لم تُضف المادة: ' + error.message, false);
-  $('nSub').value = ''; $('nTeacher').value = '';
-  say('subMsg', 'تمت إضافة المادة.', true);
-  await loadSubjects();
+  if(!currentSchool) return;
+  const name=$('nSub').value.trim();
+  if(!name) return say('subMsg','اكتب اسم المادة.',false);
+  const {error}=await sb.from('subjects').insert({school_id:currentSchool.id,name,coef:Math.max(0,Number($('nCoef').value)||0),teacher_name:$('nTeacher').value.trim(),sort_order:SUBS.length+1}).select().single();
+  if(error) return say('subMsg','لم تُضف المادة: '+error.message,false);
+  $('nSub').value=''; $('nTeacher').value='';
+  say('subMsg','تمت إضافة المادة.',true); await loadSubjects();
 }
-
 async function addProposed() {
-  if (!currentSchool) return;
-  if (SUBS.length && !confirm('لديك مواد بالفعل. هل تضيف القائمة المقترحة أيضًا؟')) return;
-  const rows = PROPOSED.map((name, i) => ({ school_id: currentSchool.id, name, coef: 1, teacher_name: '', sort_order: SUBS.length + i + 1 }));
-  const { error } = await sb.from('subjects').insert(rows).select();
-  if (error) return say('subMsg', 'لم تُضف القائمة: ' + error.message, false);
-  say('subMsg', 'أُضيفت ' + rows.length + ' مادة بمعامل 1 قابل للتعديل.', true);
-  await loadSubjects();
+  if(!currentSchool) return;
+  if(SUBS.length&&!confirm('لديك مواد بالفعل. هل تضيف القائمة المقترحة أيضًا؟')) return;
+  const rows=PROPOSED.map((name,i)=>({school_id:currentSchool.id,name,coef:1,teacher_name:'',sort_order:SUBS.length+i+1}));
+  const {error}=await sb.from('subjects').insert(rows).select();
+  if(error) return say('subMsg','لم تُضف القائمة: '+error.message,false);
+  say('subMsg','أُضيفت '+rows.length+' مادة بمعامل 1 قابل للتعديل.',true); await loadSubjects();
 }
-
 async function saveWeights() {
-  if (!currentSchool) return;
-  const patch = {
-    weight_cc: +$('wcc').value || 0, weight_f1: +$('wf1').value || 0,
-    weight_f2: +$('wf2').value || 0, weight_ex: +$('wex').value || 0,
-    absence_limit: Math.max(1, +$('wlim').value || 10)
-  };
-  const { data, error } = await sb.from('schools').update(patch).eq('id', currentSchool.id).select().single();
-  if (error) return say('wMsg', 'لم تُحفظ: ' + error.message, false);
-  sch = data;
-  say('wMsg', 'تم حفظ الأوزان.', true);
-  renderGrades();
+  if(!currentSchool) return;
+  const patch={weight_cc:+$('wcc').value||0,weight_f1:+$('wf1').value||0,weight_f2:+$('wf2').value||0,weight_ex:+$('wex').value||0,absence_limit:Math.max(1,+$('wlim').value||10)};
+  const {data,error}=await sb.from('schools').update(patch).eq('id',currentSchool.id).select().single();
+  if(error) return say('wMsg','لم تُحفظ: '+error.message,false);
+  sch=data; say('wMsg','تم حفظ الأوزان.',true);
 }
 
 // ---------- الأفواج ----------
 async function loadGroups() {
-  const { data, error } = await sb.from('school_groups').select('id,name,level,sort_order').eq('school_id', currentSchool.id).order('sort_order');
-  if (error) return say('groupMsg', 'تعذر تحميل الأفواج: ' + error.message, false);
-  groups = data;
-  if (!currentGroup || !groups.find(g => g.id === currentGroup.id)) currentGroup = groups[0] || null;
+  const {data,error}=await sb.from('school_groups').select('id,name,level,sort_order').eq('school_id',currentSchool.id).order('sort_order');
+  if(error) return say('groupMsg','تعذر تحميل الأفواج: '+error.message,false);
+  groups=data;
+  if(!currentGroup||!groups.find(g=>g.id===currentGroup.id)) currentGroup=groups[0]||null;
   renderGroupChips();
-  if (currentGroup) pickGroup(currentGroup.id);
+  if(currentGroup) pickGroup(currentGroup.id);
 }
-
 function renderGroupChips() {
-  $('groupChips').innerHTML = groups.map(g => `<button class="gchip ${currentGroup && currentGroup.id === g.id ? 'on' : ''}" onclick="pickGroup('${g.id}')">${esc(g.name)}</button>`).join('')
-    || '<p class="note">لا توجد أفواج.</p>';
+  $('groupChips').innerHTML=groups.map(g=>`<button class="gchip ${currentGroup&&currentGroup.id===g.id?'on':''}" onclick="pickGroup('${g.id}')">${esc(g.name)}</button>`).join('')||'<p class="note">لا توجد أفواج.</p>';
 }
-
 function pickGroup(id) {
-  currentGroup = groups.find(g => g.id === id);
-  if (!currentGroup) return;
+  currentGroup=groups.find(g=>g.id===id);
+  if(!currentGroup) return;
   renderGroupChips();
-  $('stSearch').value = '';
-  $('studentsTitle').textContent = 'التلاميذ: ' + currentGroup.name;
+  $('stSearch').value='';
+  $('studentsTitle').textContent='التلاميذ: '+currentGroup.name;
   loadStudents();
 }
-
 $('renameGroupBtn').onclick = async () => {
-  if (!currentGroup) return say('groupMsg', 'اختر فوجًا أولًا.', false);
-  const name = $('groupRename').value.trim();
-  if (!name) return say('groupMsg', 'اكتب الاسم الجديد.', false);
-  const { error } = await sb.from('school_groups').update({ name }).eq('id', currentGroup.id);
-  if (error) return say('groupMsg', 'لم يُحفظ الاسم: ' + error.message, false);
-  $('groupRename').value = '';
-  say('groupMsg', 'تم تغيير اسم الفوج.', true);
-  await loadGroups();
+  if(!currentGroup) return say('groupMsg','اختر فوجًا أولًا.',false);
+  const name=$('groupRename').value.trim();
+  if(!name) return say('groupMsg','اكتب الاسم الجديد.',false);
+  const {error}=await sb.from('school_groups').update({name}).eq('id',currentGroup.id);
+  if(error) return say('groupMsg','لم يُحفظ الاسم: '+error.message,false);
+  $('groupRename').value='';
+  say('groupMsg','تم تغيير اسم الفوج.',true); await loadGroups();
 };
 
-// ---------- التلاميذ ----------
+// ---------- قائمة التلاميذ ----------
 async function loadStudents() {
-  if (!currentGroup) return;
-  const { data, error } = await sb.from('students')
-    .select('id,list_number,first_name,last_name,birth_date,sex,status')
-    .eq('group_id', currentGroup.id).order('list_number');
-  if (error) return say('studentMsg', 'تعذر تحميل التلاميذ: ' + error.message, false);
-  window._students = data;
+  if(!currentGroup) return;
+  const {data,error}=await sb.from('students').select('id,list_number,first_name,last_name,birth_date,sex,status,guardian_name,guardian_phone,admin_notes,council_remarks').eq('group_id',currentGroup.id).order('list_number');
+  if(error) return say('studentMsg','تعذر تحميل التلاميذ: '+error.message,false);
+  window._students=data;
   renderStudents();
-  await loadGrades();
 }
-
 function renderStudents() {
-  const q = $('stSearch').value.trim();
-  const list = (window._students || []).filter(s => !q || (s.first_name + ' ' + s.last_name).includes(q));
-  $('studentList').innerHTML = list.length
-    ? `<div class="wrap"><table><tr><th>الرقم</th><th>الاسم واللقب</th><th>الميلاد</th><th>الجنس</th><th>الحالة</th><th></th></tr>` +
-      list.map(s => `<tr>
+  const q=$('stSearch').value.trim();
+  const list=(window._students||[]).filter(s=>!q||(s.first_name+' '+s.last_name).includes(q));
+  $('studentList').innerHTML=list.length
+    ?`<div class="wrap"><table><tr><th>الرقم</th><th>الاسم واللقب</th><th>الجنس</th><th>الحالة</th><th></th></tr>`+
+    list.map(s=>`<tr class="strow" onclick="openStudent('${s.id}')">
 <td>${s.list_number}</td>
 <td>${esc(s.first_name)} ${esc(s.last_name)}</td>
-<td>${esc(s.birth_date)}</td>
 <td>${esc(s.sex)}</td>
 <td>${esc(s.status)}</td>
-<td>
-<button class="small secondary" onclick="toggleArchive('${s.id}','${s.status}')">${s.status === 'مسجل' ? 'أرشفة' : 'استرجاع'}</button>
-<button class="small danger" onclick="removeStudent('${s.id}')">حذف</button>
-</td>
-</tr>`).join('') + '</table></div>'
-    : '<p class="note">لا يوجد تلاميذ في هذا الفوج بعد.</p>';
+<td><button class="small secondary" onclick="event.stopPropagation();toggleArchive('${s.id}','${s.status}')">${s.status==='مسجل'?'أرشفة':'استرجاع'}</button> <button class="small danger" onclick="event.stopPropagation();removeStudent('${s.id}')">حذف</button></td>
+</tr>`).join('')+'</table></div>'
+    :'<p class="note">لا يوجد تلاميذ في هذا الفوج بعد.</p>';
+}
+$('stSearch').oninput=renderStudents;
+$('addStudentBtn').onclick = async () => {
+  if(!currentGroup||!currentSchool) return say('studentMsg','اختر فوجًا أولًا.',false);
+  const first=$('stFirst').value.trim(),last=$('stLast').value.trim(),birth=$('stBirth').value,sex=$('stSex').value;
+  if(!first||!last||!birth) return say('studentMsg','الاسم واللقب وتاريخ الميلاد مطلوبة.',false);
+  const nextNo=(window._students||[]).reduce((m,s)=>Math.max(m,s.list_number),0)+1;
+  const {error}=await sb.from('students').insert({school_id:currentSchool.id,group_id:currentGroup.id,list_number:nextNo,first_name:first,last_name:last,birth_date:birth,sex});
+  if(error){const dup=error.message.includes('duplicate')||error.message.includes('unique');return say('studentMsg',dup?'رقم الترتيب مكرر، أعد المحاولة.':'لم يُحفظ التلميذ: '+error.message,false);}
+  $('stFirst').value='';$('stLast').value='';$('stBirth').value='';
+  say('studentMsg','تمت إضافة التلميذ بنجاح.',true); loadStudents();
+};
+async function toggleArchive(id,status) {
+  const next=status==='مسجل'?'مؤرشف':'مسجل';
+  const {error}=await sb.from('students').update({status:next}).eq('id',id);
+  if(error) return say('studentMsg','لم يُحفظ التغيير: '+error.message,false);
+  say('studentMsg',next==='مؤرشف'?'تمت أرشفة التلميذ.':'تم استرجاع التلميذ.',true); loadStudents();
+}
+async function removeStudent(id) {
+  if(!confirm('حذف هذا التلميذ نهائيًا مع علاماته وغياباته؟')) return;
+  const {error}=await sb.from('students').delete().eq('id',id);
+  if(error) return say('studentMsg','تعذر الحذف: '+error.message,false);
+  say('studentMsg','تم الحذف.',true); loadStudents();
 }
 
-$('stSearch').oninput = renderStudents;
-
-$('addStudentBtn').onclick = async () => {
-  if (!currentGroup || !currentSchool) return say('studentMsg', 'اختر فوجًا أولًا.', false);
-  const first = $('stFirst').value.trim(), last = $('stLast').value.trim(), birth = $('stBirth').value, sex = $('stSex').value;
-  if (!first || !last || !birth) return say('studentMsg', 'الاسم واللقب وتاريخ الميلاد مطلوبة.', false);
-  const nextNo = (window._students || []).reduce((m, s) => Math.max(m, s.list_number), 0) + 1;
-  const { error } = await sb.from('students').insert({
-    school_id: currentSchool.id, group_id: currentGroup.id, list_number: nextNo,
-    first_name: first, last_name: last, birth_date: birth, sex
-  });
-  if (error) {
-    const dup = error.message.includes('duplicate') || error.message.includes('unique');
-    return say('studentMsg', dup ? 'رقم الترتيب مكرر في هذا الفوج، أعد المحاولة.' : 'لم يُحفظ التلميذ: ' + error.message, false);
-  }
-  $('stFirst').value = ''; $('stLast').value = ''; $('stBirth').value = '';
-  say('studentMsg', 'تمت إضافة التلميذ بنجاح.', true);
+// ---------- صفحة التلميذ ----------
+async function openStudent(id) {
+  const st=(window._students||[]).find(s=>s.id===id);
+  if(!st) return;
+  currentStudent=st;
+  $('detailCard').classList.add('hidden');
+  $('studentCard').classList.remove('hidden');
+  $('stDetailName').textContent=st.first_name+' '+st.last_name+' — '+currentGroup.name;
+  $('stEditFirst').value=st.first_name;
+  $('stEditLast').value=st.last_name;
+  $('stEditBirth').value=st.birth_date;
+  $('stEditSex').value=st.sex;
+  $('stEditGuardian').value=st.guardian_name||'';
+  $('stEditPhone').value=st.guardian_phone||'';
+  $('stEditNotes').value=st.admin_notes||'';
+  showStTab('info');
+  await loadStGrades();
+  await loadAbsences();
+}
+$('backToGroupBtn').onclick = () => {
+  $('studentCard').classList.add('hidden');
+  $('detailCard').classList.remove('hidden');
   loadStudents();
 };
-
-async function toggleArchive(id, status) {
-  const next = status === 'مسجل' ? 'مؤرشف' : 'مسجل';
-  const { error } = await sb.from('students').update({ status: next }).eq('id', id);
-  if (error) return say('studentMsg', 'لم يُحفظ التغيير: ' + error.message, false);
-  say('studentMsg', next === 'مؤرشف' ? 'تمت أرشفة التلميذ.' : 'تم استرجاع التلميذ.', true);
-  loadStudents();
+function showStTab(t) {
+  ['info','grades','abs','report'].forEach(x=>$('stTab'+x.charAt(0).toUpperCase()+x.slice(1)).classList.toggle('hidden',x!==t));
+  document.querySelectorAll('.tab[data-t]').forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  if(t==='report') buildReport();
 }
 
-async function removeStudent(id) {
-  if (!confirm('حذف هذا التلميذ نهائيًا مع علاماته وغياباته؟')) return;
-  const { error } = await sb.from('students').delete().eq('id', id);
-  if (error) return say('studentMsg', 'تعذر الحذف: ' + error.message, false);
-  say('studentMsg', 'تم الحذف.', true);
-  loadStudents();
+// ---------- حفظ معلومات التلميذ ----------
+$('saveStInfoBtn').onclick = async () => {
+  if(!currentStudent) return;
+  const patch={first_name:$('stEditFirst').value.trim(),last_name:$('stEditLast').value.trim(),birth_date:$('stEditBirth').value,sex:$('stEditSex').value,guardian_name:$('stEditGuardian').value.trim(),guardian_phone:$('stEditPhone').value.trim(),admin_notes:$('stEditNotes').value.trim()};
+  if(!patch.first_name||!patch.last_name||!patch.birth_date) return say('stInfoMsg','الاسم واللقب وتاريخ الميلاد مطلوبة.',false);
+  const {error}=await sb.from('students').update(patch).eq('id',currentStudent.id);
+  if(error) return say('stInfoMsg','لم تُحفظ: '+error.message,false);
+  Object.assign(currentStudent,patch);
+  say('stInfoMsg','تم حفظ المعلومات.',true);
+};
+
+// ---------- علامات التلميذ ----------
+function wts(){return{cc:+sch.weight_cc,f1:+sch.weight_f1,f2:+sch.weight_f2,ex:+sch.weight_ex};}
+function subAvg(e){
+  if(!e||!sch) return null;
+  const W=wts();let t=0,w=0;
+  CC.forEach(k=>{if(e[k]!=null){t+=e[k]*W[k];w+=W[k];}});
+  return w?Math.round(t/w*100)/100:null;
 }
-
-// ---------- العلامات والمعدلات ----------
-function wts() { return { cc: +sch.weight_cc, f1: +sch.weight_f1, f2: +sch.weight_f2, ex: +sch.weight_ex }; }
-
-function subAvg(e) {
-  if (!e || !sch) return null;
-  const W = wts();
-  let t = 0, w = 0;
-  CC.forEach(k => { if (e[k] != null) { t += e[k] * W[k]; w += W[k]; } });
-  return w ? Math.round(t / w * 100) / 100 : null;
+function genAvg(){
+  if(!currentStudent||!currentGroup) return null;
+  const lvl=currentGroup.level;let t=0,c=0;
+  SUBS.forEach(s=>{if(!s.levels.includes(lvl)) return;const a=subAvg(G[currentStudent.id]?.[s.id]);if(a!=null){t+=a*s.coef;c+=s.coef;}});
+  return c?Math.round(t/c*100)/100:null;
 }
-
-function genAvg(sid, lvl) {
-  let t = 0, c = 0;
-  SUBS.forEach(s => {
-    if (!s.levels.includes(lvl)) return;
-    const a = subAvg(G[sid]?.[s.id]);
-    if (a != null) { t += a * s.coef; c += s.coef; }
-  });
-  return c ? Math.round(t / c * 100) / 100 : null;
+async function loadStGrades() {
+  if(!currentStudent) return;
+  const {data,error}=await sb.from('grades').select('student_id,subject_id,cc,f1,f2,ex,teacher_note').eq('student_id',currentStudent.id);
+  if(error) return say('stGradeMsg','تعذر تحميل العلامات: '+error.message,false);
+  G[currentStudent.id]={};
+  data.forEach(r=>{G[currentStudent.id][r.subject_id]={...r,cc:n(r.cc),f1:n(r.f1),f2:n(r.f2),ex:n(r.ex)};});
+  renderStGrades();
 }
-
-async function loadGrades() {
-  const ids = (window._students || []).map(s => s.id);
-  G = {};
-  if (ids.length) {
-    const { data, error } = await sb.from('grades').select('student_id,subject_id,cc,f1,f2,ex,teacher_note').in('student_id', ids);
-    if (error) return say('gradeMsg', 'تعذر تحميل العلامات: ' + error.message, false);
-    data.forEach(r => {
-      (G[r.student_id] = G[r.student_id] || {})[r.subject_id] = { ...r, cc: n(r.cc), f1: n(r.f1), f2: n(r.f2), ex: n(r.ex) };
-    });
-  }
-  renderGrades();
-}
-
-function renderGrades() {
-  if (!currentGroup || !sch) return;
-  const lvl = currentGroup.level;
-  const subs = SUBS.filter(s => s.levels.includes(lvl));
-  if (!subs.find(s => s.id === curSub)) curSub = subs[0]?.id || null;
-  $('gSub').innerHTML = subs.map(s => `<option value="${s.id}" ${s.id === curSub ? 'selected' : ''}>${esc(s.name)} (معامل ${s.coef})</option>`).join('')
-    || '<option value="">لا توجد مواد لهذا المستوى</option>';
-  if (!curSub) { $('gradeTable').innerHTML = '<p class="note">أضف مواد من تبويب المواد والأوزان.</p>'; return; }
-
-  const rows = (window._students || []).filter(s => s.status === 'مسجل').map(s => {
-    const e = G[s.id]?.[curSub] || {};
+function renderStGrades() {
+  if(!currentStudent||!currentGroup||!sch) return;
+  const lvl=currentGroup.level;
+  const subs=SUBS.filter(s=>s.levels.includes(lvl));
+  const rows=subs.map(s=>{
+    const e=G[currentStudent.id]?.[s.id]||{};
     return `<tr>
-<td>${s.list_number}</td>
-<td>${esc(s.first_name)} ${esc(s.last_name)}</td>
-${CC.map(k => `<td><input type="number" min="0" max="20" step="any" value="${e[k] ?? ''}" onchange="gradeIn('${s.id}','${k}',this)"></td>`).join('')}
+<td>${esc(s.name)} <span class="note">(×${s.coef})</span></td>
+${CC.map(k=>`<td><input type="number" min="0" max="20" step="any" value="${e[k]??''}" onchange="stGradeIn('${s.id}','${k}',this)"></td>`).join('')}
 <td><b>${f2(subAvg(e))}</b></td>
-<td><b>${f2(genAvg(s.id, lvl))}</b></td>
-<td><input class="wide" value="${esc(e.teacher_note || '')}" placeholder="ملاحظة" onchange="saveGrade('${s.id}',{teacher_note:this.value.trim()})"></td>
+<td><input class="wide" value="${esc(e.teacher_note||'')}" placeholder="ملاحظة" onchange="saveStGrade('${s.id}',{teacher_note:this.value.trim()})"></td>
 </tr>`;
   }).join('');
-
-  $('gradeTable').innerHTML = rows
-    ? `<div class="wrap"><table><tr><th>الرقم</th><th>الاسم واللقب</th><th>التقويم المستمر</th><th>الفرض الأول</th><th>الفرض الثاني</th><th>الاختبار</th><th>معدل المادة</th><th>المعدل العام</th><th>ملاحظة الأستاذ</th></tr>${rows}</table></div>`
-    : '<p class="note">لا يوجد تلاميذ في هذا الفوج.</p>';
+  $('stGradeTable').innerHTML=rows
+    ?`<div class="wrap"><table><tr><th>المادة</th><th>ت.مستمر</th><th>فرض1</th><th>فرض2</th><th>اختبار</th><th>المعدل</th><th>ملاحظة الأستاذ</th></tr>${rows}</table></div><p><b>المعدل العام: ${f2(genAvg())} / 20</b></p>`
+    :'<p class="note">أضف مواد من تبويب المواد والأوزان.</p>';
+}
+function stGradeIn(subId,k,el) {
+  const t=el.value.trim();let v=null;
+  if(t!==''){v=Number(t);if(!isFinite(v)||v<0||v>20){say('stGradeMsg','العلامة يجب أن تكون بين 0 و 20.',false);el.value=G[currentStudent.id]?.[subId]?.[k]??'';return;}v=Math.round(v*100)/100;}
+  saveStGrade(subId,{[k]:v});
+}
+async function saveStGrade(subId,patch) {
+  if(!currentStudent||!subId) return;
+  const cur={...(G[currentStudent.id]?.[subId]||{}),...patch};
+  const payload={student_id:currentStudent.id,subject_id:subId,cc:cur.cc??null,f1:cur.f1??null,f2:cur.f2??null,ex:cur.ex??null,teacher_note:cur.teacher_note??''};
+  const {data,error}=await sb.from('grades').upsert(payload,{onConflict:'student_id,subject_id'}).select().single();
+  if(error) return say('stGradeMsg','لم تُحفظ: '+error.message,false);
+  (G[currentStudent.id]=G[currentStudent.id]||{})[subId]={...data,cc:n(data.cc),f1:n(data.f1),f2:n(data.f2),ex:n(data.ex)};
+  say('stGradeMsg','تم الحفظ.',true); renderStGrades();
 }
 
-function gradeIn(sid, k, el) {
-  const t = el.value.trim();
-  let v = null;
-  if (t !== '') {
-    v = Number(t);
-    if (!isFinite(v) || v < 0 || v > 20) {
-      say('gradeMsg', 'العلامة يجب أن تكون بين 0 و 20.', false);
-      el.value = G[sid]?.[curSub]?.[k] ?? '';
-      return;
-    }
-    v = Math.round(v * 100) / 100;
-  }
-  saveGrade(sid, { [k]: v });
+// ---------- الغيابات ----------
+async function loadAbsences() {
+  if(!currentStudent) return;
+  const {data,error}=await sb.from('absences').select('*').eq('student_id',currentStudent.id).order('record_date',{ascending:false});
+  if(error) return say('absMsg','تعذر تحميل الغيابات: '+error.message,false);
+  currentStudent._abs=data;
+  renderAbsences();
+  fillAbsSub();
+}
+function fillAbsSub() {
+  $('absSub').innerHTML='<option value="">غير محددة</option>'+SUBS.filter(s=>s.levels.includes(currentGroup.level)).map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('');
+}
+function renderAbsences() {
+  const abs=currentStudent._abs||[];
+  const absCount=abs.filter(x=>x.kind==='غياب').length;
+  const lim=sch?.absence_limit||10;
+  $('stAbsWarn').innerHTML=absCount>=lim?`<div class="warn">تنبيه: تجاوز التلميذ حد الغيابات (${absCount} من أصل ${lim} مسموح به).</div>`:'';
+  $('absList').innerHTML=abs.length
+    ?`<div class="wrap"><table><tr><th>التاريخ</th><th>النوع</th><th>المادة</th><th>مبرر</th><th>دقائق</th><th>السبب</th><th></th></tr>`+
+    abs.map(a=>`<tr>
+<td>${esc(a.record_date)}</td>
+<td>${esc(a.kind)}</td>
+<td>${a.subject_id?esc(SUBS.find(s=>s.id===a.subject_id)?.name||'—'):'—'}</td>
+<td>${a.justified?'نعم':'لا'}</td>
+<td>${a.minutes||''}</td>
+<td>${esc(a.reason)}</td>
+<td><button class="danger" onclick="removeAbs('${a.id}')">حذف</button></td>
+</tr>`).join('')+'</table></div>'
+    :'<p class="note">لا توجد غيابات مسجّلة.</p>';
+}
+$('addAbsBtn').onclick = async () => {
+  if(!currentStudent) return;
+  const kind=$('absKind').value, date=$('absDate').value;
+  if(!date) return say('absMsg','حدد التاريخ.',false);
+  const {error}=await sb.from('absences').insert({student_id:currentStudent.id,kind,record_date:date,subject_id:$('absSub').value||null,justified:$('absJust').value==='1',minutes:kind==='تأخر'?Math.max(0,Number($('absMin').value)||0):0,reason:$('absReason').value.trim()});
+  if(error) return say('absMsg','لم يُسجَّل: '+error.message,false);
+  $('absReason').value='';
+  say('absMsg','تم التسجيل.',true); await loadAbsences();
+};
+async function removeAbs(id) {
+  const {error}=await sb.from('absences').delete().eq('id',id);
+  if(error) return say('absMsg','تعذر الحذف: '+error.message,false);
+  say('absMsg','تم الحذف.',true); await loadAbsences();
 }
 
-async function saveGrade(sid, patch) {
-  if (!curSub) return;
-  const cur = { ...(G[sid]?.[curSub] || {}), ...patch };
-  const payload = {
-    student_id: sid, subject_id: curSub,
-    cc: cur.cc ?? null, f1: cur.f1 ?? null, f2: cur.f2 ?? null, ex: cur.ex ?? null,
-    teacher_note: cur.teacher_note ?? ''
-  };
-  const { data, error } = await sb.from('grades').upsert(payload, { onConflict: 'student_id,subject_id' }).select().single();
-  if (error) return say('gradeMsg', 'لم تُحفظ: ' + error.message, false);
-  (G[sid] = G[sid] || {})[curSub] = { ...data, cc: n(data.cc), f1: n(data.f1), f2: n(data.f2), ex: n(data.ex) };
-  say('gradeMsg', 'تم الحفظ.', true);
-  renderGrades();
+// ---------- كشف النقاط ----------
+function buildReport() {
+  if(!currentStudent||!currentGroup||!sch) return;
+  const lvl=currentGroup.level;
+  const subs=SUBS.filter(s=>s.levels.includes(lvl));
+  $('rpSchool').textContent=sch.name+' — '+sch.school_year+' — الفصل '+sch.term;
+  $('rpName').textContent=currentStudent.first_name+' '+currentStudent.last_name;
+  $('rpGroup').textContent=currentGroup.name;
+  $('rpLevel').textContent=LVN[lvl]||'';
+  $('rpYear').textContent=sch.school_year;
+  $('rpAvg').textContent=f2(genAvg());
+  $('rpAbs').textContent=(currentStudent._abs||[]).filter(x=>x.kind==='غياب').length;
+  $('rpRemarks').value=currentStudent.council_remarks||'';
+  const rows=subs.map(s=>{
+    const e=G[currentStudent.id]?.[s.id]||{};
+    return `<tr>
+<td>${esc(s.name)}</td><td>${s.coef}</td>
+${CC.map(k=>`<td>${e[k]??'—'}</td>`).join('')}
+<td><b>${f2(subAvg(e))}</b></td>
+<td>${esc(e.teacher_note||'')}</td>
+</tr>`;
+  }).join('');
+  $('rpTable').innerHTML=rows
+    ?`<div class="wrap"><table><tr><th>المادة</th><th>المعامل</th><th>ت.مستمر</th><th>فرض1</th><th>فرض2</th><th>اختبار</th><th>المعدل</th><th>ملاحظة الأستاذ</th></tr>${rows}</table></div>`
+    :'<p class="note">لا توجد مواد.</p>';
 }
+async function saveRemarks(v) {
+  if(!currentStudent) return;
+  const {error}=await sb.from('students').update({council_remarks:v.trim()}).eq('id',currentStudent.id);
+  if(!error) currentStudent.council_remarks=v.trim();
+}
+
+// ---------- تاريخ الغياب الافتراضي ----------
+$('absDate').value=new Date().toISOString().slice(0,10);
 
 // ---------- ربط الأزرار ----------
-$('addSubBtn').onclick = addSubject;
-$('addProposedBtn').onclick = addProposed;
-$('saveWeightsBtn').onclick = saveWeights;
+$('addSubBtn').onclick=addSubject;
+$('addProposedBtn').onclick=addProposed;
+$('saveWeightsBtn').onclick=saveWeights;
 </script>
 </body>
 </html>
