@@ -85,6 +85,12 @@ function gradeImportHtml() {
   const errors = a.errors.length ? '<div class="warnbox">' + a.errors.map(esc).join('<br>') + '</div>' : '';
   const rows = a.rows.length ? gradeImportRowsHtml() :
     '<div class="empty"><b>لم تُحلل ملفات بعد</b>ارفع كشف نقاط أو التقط صورة له، ثم ابدأ التحليل.</div>';
+  const requiresDocumentConfirmation = a.documents.some(d =>
+    !d.classification || !d.classification.is_grade_sheet || d.classification.review_required
+  );
+  const documentConfirmation = requiresDocumentConfirmation && a.rows.length
+    ? '<div class="warnbox"><label class="row"><input id="gi_confirm_document" class="gi-check" type="checkbox">أؤكد بعد مراجعة المستند أنه كشف علامات صالح للاستيراد، رغم انخفاض مؤشرات التصنيف.</label></div>'
+    : '';
 
   return '<div class="card"><h3>' + ic('file') + 'استيراد العلامات من صورة أو ملف</h3>' +
     '<p class="note">ارفع صورًا من الهاتف أو ملفات PDF وExcel وWord. ستظهر النتائج في معاينة قابلة للتعديل، ولن تُحفظ أي علامة قبل اعتمادك.</p>' +
@@ -101,7 +107,7 @@ function gradeImportHtml() {
     '<span class="tag">' + a.rows.length + ' صف</span><button class="btn gold sm" onclick="commitGradeImport()" ' +
     (a.processing || !a.rows.length ? 'disabled' : '') + '>اعتماد وحفظ المحدد</button></div></div>' +
     (a.rows.length ? '<div class="notice">اختر التلميذ لكل صف، راجع الأرقام ومصدرها، ثم علّم الصفوف التي توافق على حفظها. لن يتم الحفظ تلقائيًا. قد يتم حفظ الصفوف السابقة إذا تعذر حفظ صف لاحق لأن النظام الحالي يحفظ كل حقل باستدعاء مستقل.</div>' : '') +
-    '<div class="gi-preview">' + rows + '</div></div>';
+    documentConfirmation + '<div class="gi-preview">' + rows + '</div></div>';
 }
 
 function setGradeImportUrl(value) {
@@ -248,6 +254,11 @@ async function previewGradeImport() {
 async function commitGradeImport() {
   const rows = S.gradeImport.rows.filter(r => r.selected);
   if (!rows.length) return say('حدد صفًا واحدًا على الأقل للموافقة على حفظه.', false);
+  const uncertainDocument = S.gradeImport.documents.some(d =>
+    !d.classification || !d.classification.is_grade_sheet || d.classification.review_required
+  );
+  if (uncertainDocument && !($('gi_confirm_document') && $('gi_confirm_document').checked))
+    return say('راجع تصنيف المستند وأكد يدويًا أنه كشف علامات قبل الحفظ.', false);
   const selection = gradeImportSelection() || {
     schoolId:S.school && S.school.id,
     groupId:S.gradeImport.groupId,
