@@ -93,7 +93,7 @@ function gradeImportHtml() {
     : '';
 
   return '<div class="card"><h3>' + ic('file') + 'استيراد العلامات من صورة أو ملف</h3>' +
-    '<p class="note">ارفع صورًا من الهاتف أو ملفات PDF وExcel وWord. ستظهر النتائج في معاينة قابلة للتعديل، ولن تُحفظ أي علامة قبل اعتمادك.</p>' +
+    '<p class="note">ارفع صورًا من الهاتف أو ملفات PDF وExcel وWord. تُعتمد حاليًا الحقول الأربعة الموجودة في نظامك: التقويم المستمر والفرض الأول والثاني والاختبار؛ أما المعدلات والأعمدة الإضافية فلا تُحفظ كحقول مستقلة. لن تُحفظ أي علامة قبل اعتمادك.</p>' +
     '<div class="gi-controls">' + choose +
     '<label class="f">عنوان خدمة المعالجة (API)<input id="gi_service" type="url" value="' + esc(a.serviceUrl) +
     '" placeholder="http://localhost:8080" onchange="setGradeImportUrl(this.value)"></label></div>' +
@@ -143,8 +143,11 @@ function gradeImportRowsHtml() {
     });
     out += '</select><div class="gi-status ' + (r.studentId ? 'ok' : 'warn') + '">' + status + '</div></td>';
     CC.forEach(k => {
+      const fieldSource = r.sources && r.sources[k] ? r.sources[k] : {};
+      const cellSource = fieldSource.cell || (fieldSource.page ? ('صفحة ' + fieldSource.page + '، سطر ' + (fieldSource.line || '—')) : '');
       out += '<td><input class="gi-number" type="number" min="0" max="20" step="0.01" value="' +
-        (r.grades[k] == null ? '' : esc(r.grades[k])) + '" onchange="giSetGrade(' + i + ',\'' + k + '\',this.value)" aria-label="' + CCN[k] + '"></td>';
+        (r.grades[k] == null ? '' : esc(r.grades[k])) + '" onchange="giSetGrade(' + i + ',\'' + k + '\',this.value)" aria-label="' + CCN[k] + '">' +
+        '<div class="gi-source">' + esc(cellSource) + '</div></td>';
     });
     out += '<td><span class="gi-confidence">' + Math.round((r.confidence || 0) * 100) + '%</span></td>' +
       '<td><span class="gi-source">' + esc([...(r.matchReasons || []), ...(r.warnings || [])].join(' ')) + '</span></td></tr>';
