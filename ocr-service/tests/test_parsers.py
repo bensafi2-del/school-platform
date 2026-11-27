@@ -42,6 +42,7 @@ class StructuredParserTests(unittest.TestCase):
 
     def test_arabic_indic_digits_and_grade_range(self):
         self.assertEqual(parse_grade("١٨٫٥"), 18.5)
+        self.assertEqual(parse_grade("١٨،٥"), 18.5)
         self.assertIsNone(parse_grade("21"))
         self.assertEqual(detect_grade_field("الفرض الثاني"), "f2")
         self.assertEqual(detect_grade_field("Contrôle continu"), "cc")
@@ -69,8 +70,8 @@ class OCRParserTests(unittest.TestCase):
             },
             {
                 "line": 2,
-                "tokens": ["5", "سميرة", "15", "14", "16"],
-                "text": "5 سميرة 15 14 16",
+                "tokens": ["123", "سميرة", "15", "14", "16"],
+                "text": "123 سميرة 15 14 16",
                 "confidence": 0.91,
                 "bbox": [0, 40, 900, 30],
             },
@@ -78,7 +79,7 @@ class OCRParserTests(unittest.TestCase):
         rows, header, text = parse_ocr_lines(lines, filename="scan.jpg", page_number=1)
         self.assertEqual(header["fields"], ["f1", "f2", "ex"])
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["list_number"], 5)
+        self.assertEqual(rows[0]["list_number"], 123)
         self.assertEqual(rows[0]["grades"], {"f1": 15.0, "f2": 14.0, "ex": 16.0})
 
 
