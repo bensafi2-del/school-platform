@@ -7,6 +7,7 @@ from app.parsers import (
     parse_ocr_lines,
     parse_grade,
 )
+from app.main import _match_rows
 
 
 class StructuredParserTests(unittest.TestCase):
@@ -81,6 +82,32 @@ class OCRParserTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["list_number"], 123)
         self.assertEqual(rows[0]["grades"], {"f1": 15.0, "f2": 14.0, "ex": 16.0})
+
+
+
+
+class RosterMatchingTests(unittest.TestCase):
+    def test_exact_name_and_list_number_match(self):
+        rows = [{"raw_name": "احمد علي", "list_number": 123}]
+        roster = [{
+            "r_student": "student-1",
+            "r_no": 123,
+            "r_first": "أحمد",
+            "r_last": "علي",
+        }]
+        _match_rows(rows, roster)
+        self.assertEqual(rows[0]["suggested_student_id"], "student-1")
+        self.assertEqual(rows[0]["match_status"], "exact_name_and_number")
+
+    def test_conflicting_number_never_auto_matches(self):
+        rows = [{"raw_name": "أحمد علي", "list_number": 8}]
+        roster = [
+            {"r_student": "student-1", "r_no": 7, "r_first": "أحمد", "r_last": "علي"},
+            {"r_student": "student-2", "r_no": 8, "r_first": "سامي", "r_last": "بن صالح"},
+        ]
+        _match_rows(rows, roster)
+        self.assertIsNone(rows[0]["suggested_student_id"])
+        self.assertEqual(rows[0]["match_status"], "conflict")
 
 
 if __name__ == "__main__":
