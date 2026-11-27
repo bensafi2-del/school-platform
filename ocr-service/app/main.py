@@ -240,6 +240,15 @@ async def grade_import_preview(
         "student_count": len(roster),
         "document_count": len(documents),
         "row_count": len(all_rows),
+        "students": [
+            {
+                "student_id": student.get("r_student"),
+                "list_number": student.get("r_no"),
+                "first_name": student.get("r_first"),
+                "last_name": student.get("r_last"),
+            }
+            for student in roster
+        ],
         "documents": documents,
         "rows": all_rows,
         "notice": "هذه معاينة مؤقتة. لا تُحفظ أي علامة في قاعدة البيانات قبل اعتماد المستخدم من الواجهة.",
