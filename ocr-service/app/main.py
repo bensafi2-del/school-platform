@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import os
 from typing import Any
+from uuid import UUID
+from urllib.parse import quote
 
 import httpx
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.concurrency import run_in_threadpool
 
 from .processing import DocumentRejected, process_document
 from .parsers import normalize_label
@@ -70,10 +73,48 @@ async def authorized_roster(
     token: str, school_id: str, group_id: str, subject_id: str
 ) -> list[dict[str, Any]]:
     timeout = httpx.Timeout(20.0, connect=8.0)
+    try:
+        school_id = str(UUID(school_id))
+        group_id = str(UUID(group_id))
+        subject_id = str(UUID(subject_id))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(422, "معرّفات المؤسسة والفوج والمادة غير صالحة.") from exc
+
     async with httpx.AsyncClient(timeout=timeout) as client:
         user = await _supabase_json(client, "/auth/v1/user", token)
         if not isinstance(user, dict) or not user.get("id"):
             raise HTTPException(401, "جلسة المستخدم غير صالحة.")
+
+        # Managers may access several institutions, so confirm that group and subject
+        # really belong to the requested school. Teachers must hold the exact triple assignment.
+        is_manager = await _supabase_json(
+            client, "/rest/v1/rpc/is_school_manager", token, {"sid": school_id}
+        )
+        if is_manager is True:
+            groups = await _supabase_json(
+                client,
+                f"/rest/v1/school_groups?select=id,school_id&id=eq.{quote(group_id)}&school_id=eq.{quote(school_id)}",
+                token,
+            )
+            subjects = await _supabase_json(
+                client,
+                f"/rest/v1/subjects?select=id,school_id&id=eq.{quote(subject_id)}&school_id=eq.{quote(school_id)}",
+                token,
+            )
+            if not groups or not subjects:
+                raise HTTPException(403, "الفوج أو المادة لا ينتميان إلى المؤسسة المختارة.")
+        else:
+            assignments = await _supabase_json(
+                client, "/rest/v1/rpc/my_assignments", token, {}
+            )
+            exact_assignment = any(
+                str(item.get("a_school")) == school_id
+                and str(item.get("a_group")) == group_id
+                and str(item.get("a_subject")) == subject_id
+                for item in (assignments or [])
+            )
+            if not exact_assignment:
+                raise HTTPException(403, "هذا التعيين غير موجود ضمن موادك وأفواجك.")
 
         allowed = await _supabase_json(
             client,
@@ -208,15 +249,18 @@ async def grade_import_preview(
         if total_bytes > MAX_TOTAL_BYTES:
             raise HTTPException(413, "مجموع الملفات يتجاوز الحد المسموح.")
         try:
-            document = process_document(upload.filename or "document", content)
+            document = await run_in_threadpool(
+                process_document, upload.filename or "document", content
+            )
         except DocumentRejected as exc:
             raise HTTPException(422, f"{upload.filename or 'الملف'}: {exc}") from exc
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
         except Exception as exc:
             raise HTTPException(422, f"تعذر تحليل الملف {upload.filename or ''}. تحقق من سلامته وصيغته.") from exc
+        finally:
+            await upload.close()
         documents.append(document)
-        await upload.close()
 
     all_rows = [row for document in documents for row in document["rows"]]
     _match_rows(all_rows, roster)
