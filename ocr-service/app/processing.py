@@ -238,6 +238,12 @@ def _process_pdf(data: bytes, filename: str):
         if len(pdf.pages) > MAX_PAGES:
             raise DocumentRejected(f"ملف PDF يتجاوز الحد ({MAX_PAGES} صفحة).")
         for index, page in enumerate(pdf.pages, start=1):
+            render_scale = 180 / 72
+            rendered_pixels = page.width * page.height * render_scale * render_scale
+            if rendered_pixels > MAX_IMAGE_PIXELS:
+                raise DocumentRejected(
+                    f"أبعاد صفحة PDF رقم {index} تتجاوز حد المعالجة الآمن."
+                )
             text = page.extract_text() or ""
             text_parts.append(text)
             tables = page.extract_tables() or []
