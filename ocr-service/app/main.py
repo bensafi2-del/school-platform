@@ -19,7 +19,7 @@ SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY", "")
 MAX_FILE_BYTES = int(os.getenv("MAX_FILE_BYTES", str(15 * 1024 * 1024)))
 MAX_TOTAL_BYTES = int(os.getenv("MAX_TOTAL_BYTES", str(45 * 1024 * 1024)))
 MAX_FILES = int(os.getenv("MAX_FILES", "8"))
-CORS_ORIGINS = [x.strip() for x in os.getenv("CORS_ORIGINS", "*").split(",") if x.strip()]
+CORS_ORIGINS = [x.strip() for x in os.getenv("CORS_ORIGINS", "").split(",") if x.strip()]
 
 app = FastAPI(
     title="School Platform — Smart Grade Import",
