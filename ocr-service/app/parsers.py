@@ -82,6 +82,26 @@ def detect_grade_field(label: Any) -> str | None:
     return None
 
 
+def _fields_in_text(value: Any) -> list[str]:
+    raw = normalize_label(value)
+    found: list[tuple[int, str]] = []
+    for field, patterns in FIELD_PATTERNS.items():
+        positions = [
+            raw.find(normalize_label(term))
+            for term in patterns
+            if normalize_label(term) and normalize_label(term) in raw
+        ]
+        if positions:
+            found.append((min(positions), field))
+    found.sort(key=lambda item: item[0])
+    result = [field for _position, field in found]
+    for token in str(value or "").split():
+        field = detect_grade_field(token)
+        if field and field not in result:
+            result.append(field)
+    return result
+
+
 def _contains_any(text: str, labels: tuple[str, ...]) -> bool:
     return any(normalize_label(item) in text for item in labels)
 
@@ -134,8 +154,13 @@ def _header_info(row: list[Any]) -> dict[str, Any]:
         field = detect_grade_field(cell)
         if field and field not in columns:
             columns[field] = index
-        if number_col is None and _contains_any(label, tuple(normalize_label(x) for x in NUMBER_LABELS)):
-            number_col = index
+        if number_col is None:
+            number_labels = tuple(normalize_label(x) for x in NUMBER_LABELS)
+            short_labels = {"n", "no", "ordre", "رقم", "الرقم"}
+            if label in short_labels or any(
+                len(term) > 2 and term in label for term in number_labels
+            ):
+                number_col = index
         if full_name_col is None and _contains_any(label, tuple(normalize_label(x) for x in FULL_NAME_LABELS)):
             full_name_col = index
         if first_col is None and _contains_any(label, tuple(normalize_label(x) for x in FIRST_LABELS)):
@@ -246,14 +271,8 @@ def parse_ocr_lines(
     full_text = "\n".join(item.get("text", "") for item in lines)
     ordered_fields: list[str] = []
     for line in lines:
-        tokens = line.get("tokens", [])
-        for token in tokens:
-            field = detect_grade_field(token)
-            if field and field not in ordered_fields:
-                ordered_fields.append(field)
-        # Some multi-word headers are split into adjacent OCR tokens.
-        for field in ("cc", "f1", "f2", "ex"):
-            if field not in ordered_fields and detect_grade_field(line.get("text", "")) == field:
+        for field in _fields_in_text(line.get("text", "")):
+            if field not in ordered_fields:
                 ordered_fields.append(field)
 
     rows: list[dict[str, Any]] = []
@@ -268,7 +287,7 @@ def parse_ocr_lines(
             if value is not None:
                 numeric_values.append(value)
         # Ignore header lines containing labels such as Devoir 1 / Devoir 2.
-        if any(detect_grade_field(token) for token in line.get("tokens", [])) or detect_grade_field(text):
+        if _fields_in_text(text):
             continue
         if len(numeric_values) < 2:
             continue
