@@ -267,6 +267,9 @@ def parse_ocr_lines(
             value = parse_grade(match.group(0))
             if value is not None:
                 numeric_values.append(value)
+        # Ignore header lines containing labels such as Devoir 1 / Devoir 2.
+        if any(detect_grade_field(token) for token in line.get("tokens", [])) or detect_grade_field(text):
+            continue
         if len(numeric_values) < 2:
             continue
 
