@@ -49,6 +49,59 @@ def _validate_archive(data: bytes, ext: str) -> None:
         raise DocumentRejected("ملف Office تالف أو غير صالح.") from exc
 
 
+def _order_page_points(points: np.ndarray) -> np.ndarray:
+    points = points.astype("float32")
+    ordered = np.zeros((4, 2), dtype="float32")
+    sums = points.sum(axis=1)
+    differences = np.diff(points, axis=1).reshape(-1)
+    ordered[0] = points[np.argmin(sums)]       # top-left
+    ordered[2] = points[np.argmax(sums)]       # bottom-right
+    ordered[1] = points[np.argmin(differences)]  # top-right
+    ordered[3] = points[np.argmax(differences)]  # bottom-left
+    return ordered
+
+
+def _crop_page(rgb: np.ndarray) -> np.ndarray:
+    # Conservative four-corner page detection. If a clear quadrilateral is absent,
+    # retain the full image rather than risk cutting off student names or grades.
+    height, width = rgb.shape[:2]
+    if min(height, width) < 500:
+        return rgb
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blurred, 45, 140)
+    edges = cv2.dilate(edges, np.ones((3, 3), dtype=np.uint8), iterations=1)
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:12]:
+        perimeter = cv2.arcLength(contour, True)
+        if perimeter <= 0:
+            continue
+        polygon = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
+        area = cv2.contourArea(polygon)
+        if len(polygon) != 4 or area < height * width * 0.18:
+            continue
+        points = _order_page_points(polygon.reshape(4, 2))
+        tl, tr, br, bl = points
+        target_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+        target_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+        if target_width < 350 or target_height < 450:
+            continue
+        target_width = min(target_width, 2400)
+        target_height = min(target_height, 3400)
+        destination = np.array(
+            [[0, 0], [target_width - 1, 0],
+             [target_width - 1, target_height - 1], [0, target_height - 1]],
+            dtype="float32",
+        )
+        transform = cv2.getPerspectiveTransform(points, destination)
+        cropped = cv2.warpPerspective(
+            rgb, transform, (target_width, target_height),
+            flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE,
+        )
+        return cropped
+    return rgb
+
+
 def _deskew_and_enhance(image: Image.Image) -> Image.Image:
     image = ImageOps.exif_transpose(image).convert("RGB")
     if image.width * image.height > MAX_IMAGE_PIXELS:
@@ -57,7 +110,8 @@ def _deskew_and_enhance(image: Image.Image) -> Image.Image:
         height = max(1, round(image.height * 2400 / image.width))
         image = image.resize((2400, height), Image.Resampling.LANCZOS)
 
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    rgb = _crop_page(np.array(image))
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     gray = cv2.fastNlMeansDenoising(gray, None, 8, 7, 21)
     gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
