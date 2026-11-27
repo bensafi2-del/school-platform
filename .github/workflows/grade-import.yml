@@ -36,6 +36,10 @@ jobs:
         working-directory: ocr-service
         run: python -m compileall -q app tests
 
+      - name: Import API application
+        working-directory: ocr-service
+        run: python -c "from app.main import app; assert any(route.path == '/api/v1/grade-import/preview' for route in app.routes)"
+
       - name: Run parser tests
         working-directory: ocr-service
         run: python -m unittest discover -s tests -v
