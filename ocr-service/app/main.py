@@ -242,25 +242,28 @@ async def grade_import_preview(
     documents = []
     total_bytes = 0
     for upload in files:
-        content = await upload.read(MAX_FILE_BYTES + 1)
-        total_bytes += len(content)
-        if len(content) > MAX_FILE_BYTES:
-            raise HTTPException(413, f"الملف {upload.filename or ''} يتجاوز الحد المسموح ({MAX_FILE_BYTES // (1024 * 1024)} MB).")
-        if total_bytes > MAX_TOTAL_BYTES:
-            raise HTTPException(413, "مجموع الملفات يتجاوز الحد المسموح.")
         try:
-            document = await run_in_threadpool(
-                process_document, upload.filename or "document", content
-            )
-        except DocumentRejected as exc:
-            raise HTTPException(422, f"{upload.filename or 'الملف'}: {exc}") from exc
-        except RuntimeError as exc:
-            raise HTTPException(503, str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(422, f"تعذر تحليل الملف {upload.filename or ''}. تحقق من سلامته وصيغته.") from exc
+            remaining_bytes = MAX_TOTAL_BYTES - total_bytes
+            read_limit = min(MAX_FILE_BYTES, max(remaining_bytes, 0)) + 1
+            content = await upload.read(read_limit)
+            if len(content) > MAX_FILE_BYTES:
+                raise HTTPException(413, f"الملف {upload.filename or ''} يتجاوز الحد المسموح ({MAX_FILE_BYTES // (1024 * 1024)} MB).")
+            if len(content) > remaining_bytes:
+                raise HTTPException(413, "مجموع الملفات يتجاوز الحد المسموح.")
+            total_bytes += len(content)
+            try:
+                document = await run_in_threadpool(
+                    process_document, upload.filename or "document", content
+                )
+            except DocumentRejected as exc:
+                raise HTTPException(422, f"{upload.filename or 'الملف'}: {exc}") from exc
+            except RuntimeError as exc:
+                raise HTTPException(503, str(exc)) from exc
+            except Exception as exc:
+                raise HTTPException(422, f"تعذر تحليل الملف {upload.filename or ''}. تحقق من سلامته وصيغته.") from exc
+            documents.append(document)
         finally:
             await upload.close()
-        documents.append(document)
 
     all_rows = [row for document in documents for row in document["rows"]]
     _match_rows(all_rows, roster)
