@@ -99,7 +99,7 @@ function gradeImportHtml() {
     '" placeholder="http://localhost:8080" onchange="setGradeImportUrl(this.value)"></label></div>' +
     '<div class="gi-drop" style="margin-top:14px"><div class="gi-controls">' +
     '<label class="f">اختيار ملفات متعددة<input id="gi_files" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.pdf,.xlsx,.xls,.docx,image/*,application/pdf"></label>' +
-    '<label class="f">التقاط صورة بالكاميرا<input id="gi_camera" type="file" accept="image/*" capture="environment"></label></div>' +
+    '<label class="f">التقاط صور بالكاميرا<input id="gi_camera" type="file" accept="image/*" capture="environment" multiple></label></div>' +
     '<p class="note">الصيغ المدعومة: JPG/PNG/WebP/TIFF وPDF وXLS/XLSX وDOCX. حد الخدمة الافتراضي 15 ميغابايت للملف الواحد.</p>' +
     '<button class="btn" style="margin-top:8px" onclick="previewGradeImport()" ' + (a.processing ? 'disabled' : '') + '>' +
     (a.processing ? 'جارٍ تحليل الملفات…' : 'تحليل الملفات وعرض المعاينة') + '</button></div>' + status + errors + summaries + '</div>' +
@@ -177,8 +177,8 @@ async function previewGradeImport() {
   const base = String(S.gradeImport.serviceUrl || ($('gi_service') && $('gi_service').value) || '').trim().replace(/\/+$/, '');
   if (!/^https?:\/\/[^/]+/i.test(base)) return say('أدخل عنوان خدمة المعالجة أولًا.', false);
   const chosen = Array.from(($('gi_files') && $('gi_files').files) || []);
-  const camera = $('gi_camera') && $('gi_camera').files && $('gi_camera').files[0];
-  if (camera) chosen.push(camera);
+  const cameraFiles = Array.from(($('gi_camera') && $('gi_camera').files) || []);
+  chosen.push(...cameraFiles);
   if (!chosen.length) return say('اختر ملفًا أو التقط صورة أولًا.', false);
   if (chosen.length > 8) return say('الحد الأقصى 8 ملفات في الطلب.', false);
 
