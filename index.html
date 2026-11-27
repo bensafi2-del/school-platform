@@ -192,6 +192,9 @@ tr.click:hover td{background:var(--rose)}
 .rcard .sig div{height:70px;border:1px dashed #999;border-radius:6px;padding-top:6px}
 #printHost{display:none}
 
+input.bad{border-color:var(--err)!important;outline:2px solid #F3C9C6}
+input.okf{border-color:var(--g)}
+.tstat{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
 /* ---------- الشاشات الصغيرة ---------- */
 @media (max-width:1100px){.c7,.c5,.c6{grid-column:span 12}}
 @media (max-width:900px){
@@ -312,16 +315,31 @@ function authSay(t,ok){const el=$('authMsg');el.textContent=t;el.style.color=ok?
 // ---------- الحالة ----------
 const S={user:null,isAdmin:false,recovering:false,schools:[],school:null,groups:[],gById:{},subjects:[],students:[],G:{},absBy:{},
   view:'dash',gid:null,subId:null,stId:null,stTab:'info',setTab:'school',q:'',arch:false,
-  loading:true,err:'',menu:false,dd:null,_st:null,_dirty:true,_alerts:[]};
+  loading:true,err:'',menu:false,dd:null,_st:null,_dirty:true,_alerts:[],
+  roles:{},role:'manager',v2:false,assigns:[],
+  ta:{key:'',roster:[],grades:{},failed:{},okc:0,edits:[],names:{},counts:{},dashLoaded:false,loadedKey:'',loading:false,err:''},
+  team:{loaded:false,loading:false,members:[],assigns:[],err:''},aud:{loaded:false,loading:false,rows:[],err:''},
+  plat:{loaded:false,loading:false,schools:[],users:[],log:[],err:''}};
 
-const NAV=[
+const NAV_M=[
  ['الرئيسية',[['dash','لوحة التحكم','home']]],
  ['الإدارة',[['schools','المؤسسات التعليمية','building'],['groups','الأفواج والأقسام','layers'],['students','التلاميذ','user'],['teachers','الأساتذة','briefcase']]],
  ['التقويم',[['grades','إدخال العلامات','edit'],['avgs','حساب المعدلات','calc'],['cards','كشوف النقاط','file']]],
  ['التحليل',[['results','النتائج والإحصائيات','chart'],['reports','التقارير','clip']]],
- ['النظام',[['settings','الإعدادات','sliders']]]
+ ['النظام',[['audit','سجل العمليات','clock'],['settings','الإعدادات','sliders']]]
 ];
-const TITLES={dash:'لوحة التحكم',schools:'المؤسسات التعليمية',groups:'الأفواج والأقسام',students:'التلاميذ',teachers:'الأساتذة',grades:'إدخال العلامات',avgs:'حساب المعدلات',cards:'كشوف النقاط',results:'النتائج والإحصائيات',reports:'التقارير',settings:'الإعدادات'};
+const NAV_T=[
+ ['الرئيسية',[['tdash','لوحة الأستاذ','home']]],
+ ['التقويم',[['tgrades','إدخال العلامات','edit']]],
+ ['النظام',[['settings','الحساب وكلمة المرور','sliders']]]
+];
+function navList(){
+  if(S.role==='teacher') return NAV_T;
+  const n=NAV_M.map(([h,it])=>[h,it.slice()]);
+  if(S.isAdmin) n.push(['المنصة',[['platform','إدارة المنصة','users']]]);
+  return n;
+}
+const TITLES={dash:'لوحة التحكم',schools:'المؤسسات التعليمية',groups:'الأفواج والأقسام',students:'التلاميذ',teachers:'الأساتذة',grades:'إدخال العلامات',avgs:'حساب المعدلات',cards:'كشوف النقاط',results:'النتائج والإحصائيات',reports:'التقارير',settings:'الإعدادات',tdash:'لوحة الأستاذ',tgrades:'إدخال العلامات',audit:'سجل العمليات',platform:'إدارة المنصة'};
 
 // ---------- المصادقة ----------
 $('authLogo').innerHTML=ic('book');
@@ -364,9 +382,13 @@ async function boot(){
   try{
     const {data:adm}=await sb.from('admins').select('user_id').eq('user_id',S.user.id);
     S.isAdmin=!!(adm&&adm.length);
+    S.v2=false;
+    try{const r=await sb.rpc('accept_my_invites');S.v2=!r.error;}catch(e){S.v2=false;}
     const {data,error}=await sb.from('schools').select('*').order('created_at',{ascending:false});
     if(error) throw error;
     S.schools=data;
+    S.roles={};
+    try{const {data:mem}=await sb.from('school_members').select('school_id,role,is_active').eq('user_id',S.user.id);(mem||[]).filter(m=>m.is_active).forEach(m=>{S.roles[m.school_id]=m.role;});}catch(e){}
     let saved=null;try{saved=localStorage.getItem('tmv_school');}catch(e){}
     const pick=S.schools.find(x=>x.id===saved)||S.schools[0];
     if(S.recovering){S.view='settings';S.setTab='account';}
@@ -391,6 +413,8 @@ async function loadSchool(id){
   try{
     const sc=S.schools.find(x=>x.id===id);
     if(!sc) throw new Error('المؤسسة غير موجودة');
+    S.role=S.roles[id]||'manager';
+    if(S.role==='teacher'){await loadTeacherSchool(sc);return;}
     const [groups,subjects,students,grades,abs]=await Promise.all([
       fetchAll((a,b)=>sb.from('school_groups').select('id,name,level,sort_order').eq('school_id',id).order('sort_order').range(a,b)),
       fetchAll((a,b)=>sb.from('subjects').select('id,name,coef,teacher_name,levels,sort_order').eq('school_id',id).order('sort_order').range(a,b)),
@@ -410,6 +434,7 @@ async function loadSchool(id){
     Object.values(S.absBy).forEach(l=>l.sort((a,b)=>String(b.record_date).localeCompare(String(a.record_date))));
     if(!S.gById[S.gid]) S.gid=groups[0]?.id||null;
     S.subId=null;S.stId=null;S._dirty=true;S.loading=false;S.ready=true;
+    S.team.loaded=false;S.aud.loaded=false;if(S.view==='tdash'||S.view==='tgrades') S.view='dash';
     try{localStorage.setItem('tmv_school',id);}catch(e){}
     render();
   }catch(e){S.loading=false;S.err=e.message||String(e);render();}
@@ -487,20 +512,23 @@ function render(){
   const c=$('content');
   if(S.loading){c.innerHTML='<div class="card empty"><div class="spin"></div><b>جارٍ تحميل البيانات…</b>قد يستغرق ذلك لحظات.</div>';return;}
   if(S.err){c.innerHTML=`<div class="card empty"><b>تعذر تحميل البيانات</b>${esc(S.err)}<br><button class="btn" onclick="boot()">إعادة المحاولة</button></div>`;return;}
-  if(!S.school&&S.view!=='schools'&&S.view!=='settings'){S.view='schools';}
-  const V={dash:dashHtml,schools:schoolsHtml,groups:groupsHtml,students:studentsHtml,teachers:teachersHtml,grades:gradesHtml,avgs:avgsHtml,cards:cardsHtml,results:resultsHtml,reports:reportsHtml,settings:settingsHtml};
+  if(S.role==='teacher'&&!['tdash','tgrades','settings'].includes(S.view)) S.view='tdash';
+  if(S.role!=='teacher'&&(S.view==='tdash'||S.view==='tgrades')) S.view='dash';
+  if(S.view==='platform'&&!S.isAdmin) S.view='dash';
+  if(!S.school&&S.view!=='schools'&&S.view!=='settings'&&!(S.view==='platform'&&S.isAdmin)){S.view='schools';}
+  const V={dash:dashHtml,schools:schoolsHtml,groups:groupsHtml,students:studentsHtml,teachers:teachersHtml,grades:gradesHtml,avgs:avgsHtml,cards:cardsHtml,results:resultsHtml,reports:reportsHtml,settings:settingsHtml,tdash:tdashHtml,tgrades:tgradesHtml,audit:auditHtml,platform:platformHtml};
   c.innerHTML=(V[S.view]||dashHtml)();
 }
 function renderSide(){
   $('side').className='side'+(S.menu?' open':'');
   $('scrim').className='scrim'+(S.menu?' show':'');
   $('side').innerHTML=`<div class="side-head"><div class="logo">${ic('book')}</div><div class="brand"><b>منصة المتوسطة</b><small>تسيير الطور المتوسط</small></div></div>
-  <nav class="nav">${NAV.map(([h,items])=>`<h6>${h}</h6>`+items.map(([k,l,i])=>`<button class="ni ${S.view===k?'on':''}" onclick="navTo('${k}')">${ic(i)}<span>${l}</span></button>`).join('')).join('')}</nav>
+  <nav class="nav">${navList().map(([h,items])=>`<h6>${h}</h6>`+items.map(([k,l,i])=>`<button class="ni ${S.view===k?'on':''}" onclick="navTo('${k}')">${ic(i)}<span>${l}</span></button>`).join('')).join('')}</nav>
   <div class="side-foot"><button class="ni" onclick="logout()">${ic('logout')}<span>تسجيل الخروج</span></button></div>`;
 }
 function renderTop(){
   const sc=S.school;
-  S._alerts=(S.school&&!S.loading&&!S.err)?alertsOf(getSt()):[];
+  S._alerts=(S.school&&S.role!=='teacher'&&!S.loading&&!S.err)?alertsOf(getSt()):[];
   const email=S.user?.email||'';
   $('top').innerHTML=`<button class="icbtn menubtn" onclick="toggleMenu()" aria-label="القائمة">${ic('menu')}</button>
   <div class="ttl"><h1>${TITLES[S.view]||''}</h1><div class="sub">${sc?`<span class="pill">${ic('building')}${esc(sc.name)}</span><span class="pill gold">${ic('cal')}السنة الدراسية ${esc(sc.school_year||'—')}</span>`:'<span class="pill">لا توجد مؤسسة محددة</span>'}</div></div>
@@ -514,7 +542,7 @@ function bellDd(){
   return `<div class="dd"><div class="hd">إشعارات النظام</div>`+(S._alerts.length?S._alerts.map((a,i)=>`<button class="it" onclick="goAlert(${i})">${ic(a.lv==='warn'?'alert':'info')}<span>${esc(a.t)}</span></button>`).join(''):'<div class="empty">لا توجد إشعارات. البيانات مكتملة.</div>')+'</div>';
 }
 function userDd(){
-  return `<div class="dd"><div class="hd">${esc(S.user?.email||'')}${S.isAdmin?'<br><span class="tag ok">مدير المنصة</span>':''}</div>
+  return `<div class="dd"><div class="hd">${esc(S.user?.email||'')}${S.isAdmin?'<br><span class="tag ok">مدير المنصة</span>':''}${S.role==='teacher'?'<br><span class="tag">أستاذ</span>':''}</div>
    <button class="it" onclick="S.setTab='account';navTo('settings')">${ic('sliders')}<span>الإعدادات وكلمة المرور</span></button>
    <button class="it" onclick="logout()">${ic('logout')}<span>تسجيل الخروج</span></button></div>`;
 }
@@ -523,7 +551,13 @@ function toggleMenu(){S.menu=!S.menu;renderSide();}
 document.addEventListener('click',e=>{if(S.dd&&!e.target.closest('.ddw')){S.dd=null;renderTop();}});
 function navTo(v,opt){
   S.view=v;S.stId=null;S.menu=false;S.dd=null;
+  if(v==='tgrades'&&!curAssign()&&S.assigns[0]) S.ta.key=akey(S.assigns[0]);
   render();window.scrollTo(0,0);
+  if(v==='teachers') loadTeam();
+  if(v==='audit') loadAudit();
+  if(v==='platform') loadPlatform();
+  if(v==='tdash') loadTeacherEdits();
+  if(v==='tgrades'&&S.ta.key&&S.ta.loadedKey!==S.ta.key) loadAssign();
   if(opt&&opt.focus) setTimeout(()=>{const el=$(opt.focus);if(el) el.focus();},0);
 }
 function goAlert(i){const a=S._alerts[i];if(!a) return;if(a.tab) S.setTab=a.tab;navTo(a.v);}
@@ -574,7 +608,7 @@ function dashHtml(){
 // ---------- المؤسسات ----------
 function schoolsHtml(){
   return `<div class="card"><h3>${ic('building')}إضافة مؤسسة</h3><div class="fgrid"><label class="f">اسم المؤسسة<input id="sc_name"></label><label class="f">السنة الدراسية<input id="sc_year" value="2026/2027"></label></div><div class="row" style="margin-top:12px"><button class="btn" onclick="addSchool()">${ic('plus')}إضافة مؤسسة</button><span class="note">تُنشأ 16 فوجًا تلقائيًا لكل مؤسسة جديدة.</span></div></div>
-  <div class="card"><h3>${ic('layers')}مؤسساتي</h3>${S.schools.length?`<div class="tw"><table><tr><th>المؤسسة</th><th>السنة الدراسية</th><th></th></tr>${S.schools.map(s=>`<tr><td><b>${esc(s.name)}</b> ${S.school&&S.school.id===s.id?'<span class="tag ok">النشطة</span>':''}</td><td>${esc(s.school_year)}</td><td><button class="btn ghost sm" onclick="openSchool('${s.id}')">فتح</button> <button class="btn danger sm" onclick="delSchool('${s.id}')">حذف</button></td></tr>`).join('')}</table></div>`:'<div class="empty"><b>لا توجد مؤسسات بعد</b>أضف مؤسستك الأولى من النموذج أعلاه.</div>'}</div>`;
+  <div class="card"><h3>${ic('layers')}مؤسساتي</h3>${S.schools.length?`<div class="tw"><table><tr><th>المؤسسة</th><th>السنة الدراسية</th><th></th></tr>${S.schools.map(s=>`<tr><td><b>${esc(s.name)}</b> ${S.school&&S.school.id===s.id?'<span class="tag ok">النشطة</span>':''} ${S.roles[s.id]==='teacher'?'<span class="tag">أستاذ</span>':''}</td><td>${esc(s.school_year)}</td><td><button class="btn ghost sm" onclick="openSchool('${s.id}')">فتح</button> ${S.roles[s.id]==='teacher'?'':`<button class="btn danger sm" onclick="delSchool('${s.id}')">حذف</button>`}</td></tr>`).join('')}</table></div>`:'<div class="empty"><b>لا توجد مؤسسات بعد</b>أضف مؤسستك الأولى من النموذج أعلاه.</div>'}</div>`;
 }
 async function addSchool(){
   const name=$('sc_name').value.trim(),year=$('sc_year').value.trim();
@@ -722,9 +756,9 @@ async function saveGrade(sid,subId,patch){
 async function sgIn(subId,k,el){
   const st=curSt();if(!st) return;
   const p=parseGrade(el,S.G[st.id]?.[subId]?.[k]);if(p.bad) return;
-  if(await saveGrade(st.id,subId,{[k]:p.v})){const a=$('ssa-'+subId),g=$('sgen');if(a) a.textContent=f2(subAvg(S.G[st.id][subId]));if(g) g.textContent=f2(genAvg(st));}
+  if(await saveGradeField(st.id,subId,k,p.v)){const a=$('ssa-'+subId),g=$('sgen');if(a) a.textContent=f2(subAvg(S.G[st.id][subId]));if(g) g.textContent=f2(genAvg(st));}
 }
-async function sgNote(subId,v){const st=curSt();if(st) await saveGrade(st.id,subId,{teacher_note:v.trim()});}
+async function sgNote(subId,v){const st=curSt();if(st) await saveGradeNote(st.id,subId,v);}
 function stAbs(st){
   const list=absOf(st.id),c=countAbs(st.id),lim=+S.school.absence_limit;
   const subs=S.subjects.filter(s=>s.levels.includes(S.gById[st.group_id]?.level));
@@ -785,11 +819,11 @@ function gradesHtml(){
   if(!sub) return head+emptyBox('لا توجد مواد لهذا المستوى','أضف المواد من الإعدادات.','settings','المواد والمعاملات');
   const list=gStudents(g);
   if(!list.length) return head+emptyBox('لا يوجد تلاميذ في هذا الفوج','أضف تلاميذ أولًا.','students','إلى التلاميذ');
-  return head+`<div class="card"><h3>${ic('edit')}علامات ${esc(sub.name)} — ${esc(g.name)}</h3><p class="note">العلامات من 0 إلى 20، وتُحفظ فور تغييرها. معدل المادة يُحسب بأوزان الإعدادات.</p><div class="tw"><table><tr><th>الرقم</th><th>الاسم واللقب</th>${CC.map(k=>`<th>${CCN[k]}</th>`).join('')}<th>معدل المادة</th><th>المعدل العام</th><th>ملاحظة الأستاذ</th></tr>${list.map(st=>{const e=S.G[st.id]?.[sub.id]||{};return `<tr><td>${st.list_number}</td><td>${esc(st.first_name)} ${esc(st.last_name)}</td>${CC.map(k=>`<td><input type="number" min="0" max="20" step="any" value="${e[k]??''}" aria-label="${CCN[k]}" onchange="ggIn('${st.id}','${sub.id}','${k}',this)"></td>`).join('')}<td><b id="gsa-${st.id}">${f2(subAvg(e))}</b></td><td id="gga-${st.id}">${f2(genAvg(st))}</td><td><input class="wide" value="${esc(e.teacher_note||'')}" onchange="saveGrade('${st.id}','${sub.id}',{teacher_note:this.value.trim()})"></td></tr>`;}).join('')}</table></div></div>`;
+  return head+`<div class="card"><h3>${ic('edit')}علامات ${esc(sub.name)} — ${esc(g.name)}</h3><p class="note">العلامات من 0 إلى 20، وتُحفظ فور تغييرها. معدل المادة يُحسب بأوزان الإعدادات.</p><div class="tw"><table><tr><th>الرقم</th><th>الاسم واللقب</th>${CC.map(k=>`<th>${CCN[k]}</th>`).join('')}<th>معدل المادة</th><th>المعدل العام</th><th>ملاحظة الأستاذ</th></tr>${list.map(st=>{const e=S.G[st.id]?.[sub.id]||{};return `<tr><td>${st.list_number}</td><td>${esc(st.first_name)} ${esc(st.last_name)}</td>${CC.map(k=>`<td><input type="number" min="0" max="20" step="any" value="${e[k]??''}" aria-label="${CCN[k]}" onchange="ggIn('${st.id}','${sub.id}','${k}',this)"></td>`).join('')}<td><b id="gsa-${st.id}">${f2(subAvg(e))}</b></td><td id="gga-${st.id}">${f2(genAvg(st))}</td><td><input class="wide" value="${esc(e.teacher_note||'')}" onchange="saveGradeNote('${st.id}','${sub.id}',this.value)"></td></tr>`;}).join('')}</table></div></div>`;
 }
 async function ggIn(sid,subId,k,el){
   const p=parseGrade(el,S.G[sid]?.[subId]?.[k]);if(p.bad) return;
-  if(await saveGrade(sid,subId,{[k]:p.v})){
+  if(await saveGradeField(sid,subId,k,p.v)){
     const st=S.students.find(x=>x.id===sid);
     const a=$('gsa-'+sid),g=$('gga-'+sid);
     if(a) a.textContent=f2(subAvg(S.G[sid][subId]));
@@ -828,11 +862,11 @@ function resultsHtml(){
 }
 
 // ---------- الأساتذة ----------
-function teachersHtml(){
+function legacyTeachersHtml(){
   const by={};
   S.subjects.forEach(s=>{const t=(s.teacher_name||'').trim();if(t)(by[t]=by[t]||[]).push(s);});
   const names=Object.keys(by),no=S.subjects.filter(s=>!(s.teacher_name||'').trim());
-  return `<div class="card"><h3>${ic('briefcase')}الأساتذة</h3><p class="note">تُستخرج الأسماء من حقل «الأستاذ» في المواد. لتغييرها عدّل المادة من الإعدادات.</p>${names.length?`<div class="tw"><table><tr><th>الأستاذ</th><th>المواد</th><th>المستويات</th></tr>${names.map(t=>`<tr><td><b>${esc(t)}</b></td><td>${by[t].map(s=>esc(s.name)).join('، ')}</td><td>${[...new Set(by[t].flatMap(s=>s.levels))].sort().map(l=>'م'+l).join('، ')}</td></tr>`).join('')}</table></div>`:'<div class="empty"><b>لم تُسجَّل أسماء أساتذة بعد</b>اكتب اسم الأستاذ في كل مادة من الإعدادات.</div>'}
+  return `<div class="card"><h3>${ic('briefcase')}أسماء الأساتذة المكتوبة في المواد</h3><p class="note">تُستخرج الأسماء من حقل «الأستاذ» في المواد. لتغييرها عدّل المادة من الإعدادات.</p>${names.length?`<div class="tw"><table><tr><th>الأستاذ</th><th>المواد</th><th>المستويات</th></tr>${names.map(t=>`<tr><td><b>${esc(t)}</b></td><td>${by[t].map(s=>esc(s.name)).join('، ')}</td><td>${[...new Set(by[t].flatMap(s=>s.levels))].sort().map(l=>'م'+l).join('، ')}</td></tr>`).join('')}</table></div>`:'<div class="empty"><b>لم تُسجَّل أسماء أساتذة بعد</b>اكتب اسم الأستاذ في كل مادة من الإعدادات.</div>'}
   ${no.length?`<p class="note" style="margin-top:12px">مواد بلا أستاذ محدد: ${no.map(s=>esc(s.name)).join('، ')}</p>`:''}
   <button class="btn" style="margin-top:12px" onclick="S.setTab='subjects';navTo('settings')">تعديل المواد والأساتذة</button></div>`;
 }
@@ -869,9 +903,10 @@ function exportCsv(all){
 
 // ---------- الإعدادات ----------
 function settingsHtml(){
-  const T=[['school','بيانات المؤسسة'],['subjects','المواد والمعاملات'],['weights','الأوزان وحد الغياب'],['account','الحساب وكلمة المرور'],['backup','النسخ الاحتياطي']];
+  const T0=[['school','بيانات المؤسسة'],['subjects','المواد والمعاملات'],['weights','الأوزان وحد الغياب'],['account','الحساب وكلمة المرور'],['backup','النسخ الاحتياطي']];
+  const T=S.role==='teacher'?[['account','الحساب وكلمة المرور']]:T0;
   let b='';
-  if(!S.school&&S.setTab!=='account') S.setTab='account';
+  if((!S.school&&S.setTab!=='account')||S.role==='teacher') S.setTab='account';
   if(S.setTab==='school') b=setSchool();else if(S.setTab==='subjects') b=setSubjects();else if(S.setTab==='weights') b=setWeights();else if(S.setTab==='backup') b=setBackup();else b=setAccount();
   return `<div class="card"><div class="tabs">${T.map(([k,l])=>`<button class="tab ${S.setTab===k?'on':''}" onclick="S.setTab='${k}';render()">${l}</button>`).join('')}</div>${b}</div>`;
 }
@@ -953,6 +988,265 @@ function exportBackup(){
   download('backup-'+today()+'.json',JSON.stringify(data,null,1),'application/json');
   say('تم تجهيز النسخة الاحتياطية.');
 }
+
+// ================= المرحلة 2-ب: الأساتذة وسجل العمليات وإدارة المنصة =================
+const GSH={cc:'ت.م',f1:'ف1',f2:'ف2',ex:'اخ'};
+const gradeFmt=x=>x?(CC.filter(k=>x[k]!=null).map(k=>GSH[k]+' '+Number(x[k])).join('، ')||'—'):'—';
+const dshort=x=>String(x||'').slice(0,16).replace('T',' ');
+const rowsOf=d=>Array.isArray(d)?d:(d?[d]:[]);
+
+// ---- حفظ العلامة حقلًا حقلًا في الخادم (يمنع أن يمحو مستخدمان تعديلات بعضهما) ----
+function applyGradeRow(sid,subId,r){
+  const cur=(S.G[sid]=S.G[sid]||{})[subId]||{};
+  S.G[sid][subId]={...cur,cc:n(r.g_cc),f1:n(r.g_f1),f2:n(r.g_f2),ex:n(r.g_ex),teacher_note:r.g_note||''};
+}
+async function saveGradeField(sid,subId,field,value){
+  if(!S.v2) return saveGrade(sid,subId,{[field]:value});
+  const {data,error}=await sb.rpc('save_grade_field',{p_student:sid,p_subject:subId,p_field:field,p_value:value});
+  if(error){say('لم تُحفظ العلامة: '+error.message,false);return false;}
+  applyGradeRow(sid,subId,rowsOf(data)[0]||{});
+  S._dirty=true;say('تم الحفظ.');return true;
+}
+async function saveGradeNote(sid,subId,note){
+  const txt=String(note||'').trim();
+  if(!S.v2) return saveGrade(sid,subId,{teacher_note:txt});
+  const {data,error}=await sb.rpc('save_grade_note',{p_student:sid,p_subject:subId,p_note:txt});
+  if(error){say('لم تُحفظ الملاحظة: '+error.message,false);return false;}
+  applyGradeRow(sid,subId,rowsOf(data)[0]||{});
+  S._dirty=true;say('تم الحفظ.');return true;
+}
+
+// ================= وضع الأستاذ =================
+const akey=a=>a.a_group+'|'+a.a_subject;
+const curAssign=()=>S.assigns.find(a=>akey(a)===S.ta.key)||null;
+
+async function loadTeacherSchool(sc){
+  try{
+    S.school=sc;S.groups=[];S.gById={};S.subjects=[];S.students=[];S.G={};S.absBy={};S.stId=null;
+    const {data,error}=await sb.rpc('my_assignments');
+    if(error) throw error;
+    S.assigns=(data||[]).filter(a=>a.a_school===sc.id);
+    S.ta={key:'',roster:[],grades:{},failed:{},okc:0,edits:[],names:{},counts:{},dashLoaded:false,loadedKey:'',loading:false,err:''};
+    S._dirty=true;S.loading=false;S.ready=true;
+    if(!['tdash','tgrades','settings'].includes(S.view)) S.view='tdash';
+    try{localStorage.setItem('tmv_school',sc.id);}catch(e){}
+    render();
+    loadTeacherEdits();
+  }catch(e){S.loading=false;S.err=e.message||String(e);render();}
+}
+async function loadTeacherEdits(){
+  if(S.role!=='teacher') return;
+  try{
+    const groups=[...new Set(S.assigns.map(a=>a.a_group))];
+    const rs=await Promise.all(groups.map(g=>sb.rpc('teacher_group_roster',{p_group:g})));
+    S.ta.names={};S.ta.counts={};
+    rs.forEach((r,i)=>{rowsOf(r.data).forEach(s=>{S.ta.names[s.r_student]=s.r_first+' '+s.r_last;});S.ta.counts[groups[i]]=rowsOf(r.data).length;});
+    const e=await sb.rpc('my_grade_edits',{p_limit:15});
+    S.ta.edits=e.error?[]:rowsOf(e.data);
+    S.ta.dashLoaded=true;
+    if(S.view==='tdash') render();
+  }catch(x){}
+}
+function tdashHtml(){
+  const A=S.assigns;
+  if(!A.length) return emptyBox('لم يُسنَد إليك أي فوج بعد','اطلب من مدير المؤسسة تعيينك على مادة وفوج، ثم أعد تحميل الصفحة.');
+  const stat=(i,l,v)=>`<div class="stat1"><div class="ic">${ic(i)}</div><div><div class="v">${v}</div><div class="l">${l}</div></div></div>`;
+  const grp=new Set(A.map(a=>a.a_group)).size,sub=new Set(A.map(a=>a.a_subject)).size;
+  const feed=S.ta.edits.map(e=>{
+    const sn=S.assigns.find(a=>a.a_subject===e.e_subject)?.a_subject_name||'';
+    return `<li><span class="dot">${ic('edit')}</span><div>${esc(sn)} · ${esc(S.ta.names[e.e_student]||'تلميذ')}<br><small class="note">${esc(gradeFmt(e.e_old))} ← ${esc(gradeFmt(e.e_new))}</small><time>${esc(dshort(e.e_at))}</time></div></li>`;
+  }).join('');
+  return `<div class="stats1">${stat('layers','الأفواج المسندة',grp)}${stat('book','المواد المسندة',sub)}${stat('edit','التعيينات',A.length)}</div>
+  <div class="dgrid"><section class="card c7"><h3>${ic('edit')}تعييناتي</h3><div class="shorts">${A.map(a=>`<button class="short" onclick="openAssign('${akey(a)}')"><span class="ic">${ic('edit')}</span><span>${esc(a.a_subject_name)} — ${esc(a.a_group_name)}<br><small class="note">${S.ta.counts[a.a_group]!=null?S.ta.counts[a.a_group]+' تلميذ':''}</small></span></button>`).join('')}</div></section>
+  <section class="card c5"><h3>${ic('clock')}آخر ما أدخلته</h3>${feed?`<ul class="feed">${feed}</ul>`:'<div class="empty">لم تُدخل علامات بعد.</div>'}</section></div>`;
+}
+function openAssign(key){S.ta.key=key;S.view='tgrades';render();window.scrollTo(0,0);loadAssign();}
+async function loadAssign(){
+  const a=curAssign();
+  if(!a){render();return;}
+  S.ta.loadedKey=S.ta.key;S.ta.loading=true;S.ta.err='';S.ta.roster=[];S.ta.grades={};S.ta.failed={};S.ta.okc=0;
+  render();
+  const [r,g]=await Promise.all([sb.rpc('teacher_group_roster',{p_group:a.a_group}),sb.rpc('teacher_group_grades',{p_group:a.a_group,p_subject:a.a_subject})]);
+  if(r.error||g.error){S.ta.loading=false;S.ta.loadedKey='';S.ta.err=(r.error||g.error).message;render();return;}
+  S.ta.roster=rowsOf(r.data);
+  rowsOf(g.data).forEach(x=>{S.ta.grades[x.g_student]={cc:n(x.g_cc),f1:n(x.g_f1),f2:n(x.g_f2),ex:n(x.g_ex),note:x.g_note||''};});
+  S.ta.loading=false;render();
+}
+function tStat(){
+  const miss=S.ta.roster.filter(s=>{const g=S.ta.grades[s.r_student]||{};return CC.every(k=>g[k]==null);}).length;
+  const failed=Object.keys(S.ta.failed).length;
+  return `<span class="tag ok">تم حفظ: ${S.ta.okc}</span><span class="tag ${failed?'low':''}">${failed?'لم يُحفظ: '+failed:'لا توجد علامات غير محفوظة'}</span><span class="tag">تلاميذ بلا أي علامة: ${miss}</span>`;
+}
+function updStat(){const el=$('tstat');if(el) el.innerHTML=tStat();}
+function tgradesHtml(){
+  const A=S.assigns;
+  if(!A.length) return emptyBox('لم يُسنَد إليك أي فوج بعد','اطلب من مدير المؤسسة تعيينك على مادة وفوج.');
+  const a=curAssign()||A[0];
+  const head=`<div class="card"><label class="f" style="max-width:460px">التعيين<select onchange="S.ta.key=this.value;loadAssign()">${A.map(x=>`<option value="${akey(x)}" ${akey(x)===akey(a)?'selected':''}>${esc(x.a_subject_name)} — ${esc(x.a_group_name)}</option>`).join('')}</select></label></div>`;
+  if(S.ta.loading) return head+'<div class="card empty"><div class="spin"></div><b>جارٍ تحميل القائمة…</b></div>';
+  if(S.ta.err) return head+`<div class="card empty"><b>تعذر التحميل</b>${esc(S.ta.err)}<br><button class="btn" onclick="loadAssign()">إعادة المحاولة</button></div>`;
+  const R=S.ta.roster;
+  if(!R.length) return head+emptyBox('لا يوجد تلاميذ في هذا الفوج','أبلغ مدير المؤسسة.');
+  return head+`<div class="card"><h3>${ic('edit')}علامات ${esc(a.a_subject_name)} — ${esc(a.a_group_name)}</h3><div id="tstat" class="tstat">${tStat()}</div>
+  <p class="note">العلامات من 0 إلى 20، وتُحفظ في الخادم فور تغييرها. الحقل الذي تظهر حوله حدود حمراء لم يُحفظ، فأعد المحاولة.</p>
+  <div class="tw"><table><tr><th>الرقم</th><th>الاسم واللقب</th>${CC.map(k=>`<th>${CCN[k]}</th>`).join('')}<th>معدل المادة</th><th>ملاحظة الأستاذ</th></tr>${R.map(s=>{const g=S.ta.grades[s.r_student]||{};return `<tr><td>${s.r_no}</td><td>${esc(s.r_first)} ${esc(s.r_last)}</td>${CC.map(k=>`<td><input type="number" min="0" max="20" step="any" value="${g[k]??''}" aria-label="${CCN[k]}" onchange="tgIn('${s.r_student}','${k}',this)"></td>`).join('')}<td><b id="tsa-${s.r_student}">${f2(subAvg(g))}</b></td><td><input class="wide" value="${esc(g.note||'')}" onchange="tgNote('${s.r_student}',this)"></td></tr>`;}).join('')}</table></div></div>`;
+}
+async function tgIn(sid,k,el){
+  const a=curAssign();if(!a) return;
+  const p=parseGrade(el,S.ta.grades[sid]?.[k]);if(p.bad) return;
+  const fk=sid+'|'+k;
+  const {data,error}=await sb.rpc('save_grade_field',{p_student:sid,p_subject:a.a_subject,p_field:k,p_value:p.v});
+  if(error){S.ta.failed[fk]=true;el.classList.add('bad');say('لم تُحفظ العلامة: '+error.message,false);updStat();return;}
+  delete S.ta.failed[fk];el.classList.remove('bad');
+  const r=rowsOf(data)[0]||{};
+  S.ta.grades[sid]={cc:n(r.g_cc),f1:n(r.g_f1),f2:n(r.g_f2),ex:n(r.g_ex),note:r.g_note||''};
+  S.ta.okc++;
+  const c=$('tsa-'+sid);if(c) c.textContent=f2(subAvg(S.ta.grades[sid]));
+  say('تم الحفظ.');updStat();
+}
+async function tgNote(sid,el){
+  const a=curAssign();if(!a) return;
+  const fk=sid+'|note';
+  const {data,error}=await sb.rpc('save_grade_note',{p_student:sid,p_subject:a.a_subject,p_note:String(el.value||'').trim()});
+  if(error){S.ta.failed[fk]=true;el.classList.add('bad');say('لم تُحفظ الملاحظة: '+error.message,false);updStat();return;}
+  delete S.ta.failed[fk];el.classList.remove('bad');
+  const r=rowsOf(data)[0]||{};
+  S.ta.grades[sid]={cc:n(r.g_cc),f1:n(r.g_f1),f2:n(r.g_f2),ex:n(r.g_ex),note:r.g_note||''};
+  S.ta.okc++;say('تم الحفظ.');updStat();
+}
+window.addEventListener('beforeunload',e=>{if(S.ta&&Object.keys(S.ta.failed||{}).length){e.preventDefault();e.returnValue='';}});
+
+// ================= صفحة الأساتذة للمدير: دعوات وتعيينات =================
+async function loadTeam(){
+  if(!S.v2||S.role!=='manager'||!S.school) return;
+  S.team.loading=true;
+  try{
+    const [m,a]=await Promise.all([sb.rpc('list_school_teachers',{p_school:S.school.id}),sb.from('teacher_assignments').select('school_id,user_id,subject_id,group_id').eq('school_id',S.school.id)]);
+    if(m.error) throw m.error;
+    if(a.error) throw a.error;
+    S.team.members=rowsOf(m.data);S.team.assigns=a.data||[];S.team.loaded=true;S.team.err='';
+  }catch(e){S.team.err=e.message||String(e);}
+  S.team.loading=false;
+  if(S.view==='teachers'||S.view==='audit') render();
+}
+const emailOf=uid=>(S.team.members.find(x=>x.t_uid===uid)||{}).t_email||null;
+function teachersHtml(){
+  const legacy=legacyTeachersHtml();
+  if(!S.v2) return `<div class="card"><div class="notice" style="margin-top:0">${ic('info')}<span>حسابات الأساتذة تتطلب تطبيق الملف 03_teachers.sql في قاعدة البيانات. إلى ذلك الحين تظهر هنا الأسماء المكتوبة في المواد فقط.</span></div></div>`+legacy;
+  if(S.team.loading&&!S.team.loaded) return '<div class="card empty"><div class="spin"></div><b>جارٍ التحميل…</b></div>';
+  if(S.team.err) return `<div class="card empty"><b>تعذر تحميل الأساتذة</b>${esc(S.team.err)}<br><button class="btn" onclick="loadTeam()">إعادة المحاولة</button></div>`+legacy;
+  const M=S.team.members.filter(m=>m.t_state==='member'),I=S.team.members.filter(m=>m.t_state==='invited');
+  const first=S.subjects[0],grps=S.groups.filter(g=>!first||first.levels.includes(g.level));
+  const A=S.team.assigns;
+  return `<div class="card"><h3>${ic('plus')}دعوة أستاذ</h3><div class="fgrid"><label class="f">البريد الإلكتروني للأستاذ<input id="inv_email" type="email" placeholder="teacher@example.com"></label></div>
+  <button class="btn" style="margin-top:12px" onclick="inviteTeacher()">${ic('plus')}إرسال الدعوة</button>
+  <p class="note">لا تُرسَل رسالة تلقائيًا. أخبر الأستاذ أن ينشئ حسابًا بهذا البريد من صفحة الموقع ويؤكده من بريده، فتُفعَّل دعوته عند أول دخول.</p></div>
+  <div class="card"><h3>${ic('users')}حسابات الأساتذة</h3>${M.length||I.length?`<div class="tw"><table><tr><th>البريد</th><th>الحالة</th><th></th></tr>${M.map(m=>`<tr><td>${esc(m.t_email)}</td><td><span class="tag ${m.t_active?'ok':'low'}">${m.t_active?'نشط':'معطَّل'}</span></td><td><button class="btn ghost sm" onclick="setTeacherActive('${m.t_uid}',${!m.t_active})">${m.t_active?'تعطيل':'تفعيل'}</button> <button class="btn danger sm" onclick="removeTeacher('${m.t_uid}')">حذف</button></td></tr>`).join('')}${I.map(m=>`<tr><td>${esc(m.t_email)}</td><td><span class="tag low">دعوة بانتظار القبول</span></td><td><button class="btn danger sm" data-em="${esc(m.t_email)}" onclick="cancelInvite(this.dataset.em)">إلغاء الدعوة</button></td></tr>`).join('')}</table></div>`:'<div class="empty">لا يوجد أساتذة بعد. ابدأ بدعوة أستاذ.</div>'}</div>
+  <div class="card"><h3>${ic('edit')}تعيين أستاذ على مادة وفوج</h3>${M.length&&S.subjects.length?`<div class="fgrid"><label class="f">الأستاذ<select id="as_user">${M.filter(m=>m.t_active).map(m=>`<option value="${m.t_uid}">${esc(m.t_email)}</option>`).join('')}</select></label><label class="f">المادة<select id="as_sub" onchange="fillAsgGroups()">${S.subjects.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select></label><label class="f">الفوج<select id="as_grp">${grps.map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('')}</select></label></div><button class="btn" style="margin-top:12px" onclick="assignTeacher()">${ic('plus')}تعيين</button>`:'<div class="empty">تحتاج أستاذًا مقبولًا ومادة واحدة على الأقل.</div>'}
+  ${A.length?`<div class="tw" style="margin-top:14px"><table><tr><th>الأستاذ</th><th>المادة</th><th>الفوج</th><th></th></tr>${A.map(a=>`<tr><td>${esc(emailOf(a.user_id)||'—')}</td><td>${esc(S.subjects.find(s=>s.id===a.subject_id)?.name||'—')}</td><td>${esc(S.gById[a.group_id]?.name||'—')}</td><td><button class="btn danger sm" onclick="unassign('${a.user_id}','${a.subject_id}','${a.group_id}')">إزالة</button></td></tr>`).join('')}</table></div>`:''}</div>`+legacy;
+}
+function fillAsgGroups(){
+  const s=S.subjects.find(x=>x.id===$('as_sub').value);
+  $('as_grp').innerHTML=S.groups.filter(g=>!s||s.levels.includes(g.level)).map(g=>`<option value="${g.id}">${esc(g.name)}</option>`).join('');
+}
+async function inviteTeacher(){
+  const email=$('inv_email').value.trim();
+  if(!email) return say('اكتب بريد الأستاذ.',false);
+  const {error}=await sb.rpc('invite_teacher',{p_school:S.school.id,p_email:email});
+  if(error) return say('لم تُحفظ الدعوة: '+error.message,false);
+  say('تمت الدعوة. اطلب من الأستاذ إنشاء حساب بهذا البريد.');await loadTeam();
+}
+async function cancelInvite(email){
+  const {error}=await sb.rpc('cancel_invite',{p_school:S.school.id,p_email:email});
+  if(error) return say('تعذر إلغاء الدعوة: '+error.message,false);
+  say('أُلغيت الدعوة.');await loadTeam();
+}
+async function setTeacherActive(uid,active){
+  const {error}=await sb.rpc('set_teacher_active',{p_school:S.school.id,p_user:uid,p_active:active});
+  if(error) return say('تعذر التغيير: '+error.message,false);
+  say(active?'تم تفعيل الأستاذ.':'تم تعطيل الأستاذ.');await loadTeam();
+}
+async function removeTeacher(uid){
+  if(!confirm('حذف هذا الأستاذ من المؤسسة مع كل تعييناته؟')) return;
+  const {error}=await sb.rpc('remove_teacher',{p_school:S.school.id,p_user:uid});
+  if(error) return say('تعذر الحذف: '+error.message,false);
+  say('تم حذف الأستاذ.');await loadTeam();
+}
+async function assignTeacher(){
+  const u=$('as_user').value,s=$('as_sub').value,g=$('as_grp').value;
+  if(!u||!s||!g) return say('اختر الأستاذ والمادة والفوج.',false);
+  const {error}=await sb.rpc('assign_teacher',{p_school:S.school.id,p_user:u,p_subject:s,p_group:g});
+  if(error) return say('لم يُحفظ التعيين: '+error.message,false);
+  say('تم التعيين.');await loadTeam();
+}
+async function unassign(u,s,g){
+  const {error}=await sb.rpc('unassign_teacher',{p_school:S.school.id,p_user:u,p_subject:s,p_group:g});
+  if(error) return say('تعذرت الإزالة: '+error.message,false);
+  say('أُزيل التعيين.');await loadTeam();
+}
+
+// ================= سجل العمليات =================
+const TBL={schools:'المؤسسة',school_members:'الأعضاء',subjects:'المواد',students:'التلاميذ',grades:'العلامات',absences:'الغيابات',teacher_assignments:'تعيين الأساتذة',teacher_invites:'الدعوات',profiles:'الحسابات'};
+const ACT={INSERT:'إضافة',UPDATE:'تعديل',DELETE:'حذف',SET_ACTIVE:'تغيير حالة الحساب'};
+function auditDetail(r){
+  const d=r.detail||{};
+  if(r.table_name==='grades') return `قبل: ${gradeFmt(d.old)} ← بعد: ${gradeFmt(d.new)}`;
+  if(d.changed) return 'الحقول: '+d.changed.join('، ');
+  if(r.action==='SET_ACTIVE') return (d.active?'تفعيل':'تعطيل')+(d.reason?' — '+d.reason:'');
+  return '';
+}
+async function loadAudit(){
+  if(S.role!=='manager'||!S.school) return;
+  S.aud.loading=true;
+  try{
+    if(S.v2&&!S.team.loaded) await loadTeam();
+    const {data,error}=await sb.from('audit_log').select('id,at,actor,table_name,row_id,action,detail').eq('school_id',S.school.id).order('at',{ascending:false}).limit(100);
+    if(error) throw error;
+    S.aud.rows=data||[];S.aud.err='';S.aud.loaded=true;
+  }catch(e){S.aud.err=e.message||String(e);}
+  S.aud.loading=false;
+  if(S.view==='audit') render();
+}
+function auditHtml(){
+  if(S.aud.loading&&!S.aud.loaded) return '<div class="card empty"><div class="spin"></div><b>جارٍ التحميل…</b></div>';
+  if(S.aud.err) return `<div class="card empty"><b>تعذر تحميل السجل</b>${esc(S.aud.err)}<br><button class="btn" onclick="loadAudit()">إعادة المحاولة</button></div>`;
+  const who=a=>a===S.user.id?'أنت':(emailOf(a)||'حساب آخر');
+  return `<div class="card"><h3>${ic('clock')}آخر العمليات الحساسة في المؤسسة</h3><p class="note">يُسجَّل تعديل العلامات والتلاميذ والمواد والأساتذة. لا تُنسخ البيانات الشخصية إلى السجل، وتظهر فيه أسماء الحقول المتغيرة فقط. اختصارات العلامات: ت.م التقويم المستمر، ف1 الفرض الأول، ف2 الفرض الثاني، اخ الاختبار.</p>
+  ${S.aud.rows.length?`<div class="tw"><table><tr><th>التاريخ</th><th>بواسطة</th><th>الجدول</th><th>العملية</th><th>التفاصيل</th></tr>${S.aud.rows.map(r=>`<tr><td>${esc(dshort(r.at))}</td><td>${esc(who(r.actor))}</td><td>${esc(TBL[r.table_name]||r.table_name)}</td><td>${esc(ACT[r.action]||r.action)}</td><td>${esc(auditDetail(r))}</td></tr>`).join('')}</table></div>`:'<div class="empty">لا توجد عمليات مسجلة بعد.</div>'}</div>`;
+}
+
+// ================= إدارة المنصة (أرقام وحسابات فقط، بلا بيانات تلاميذ) =================
+async function loadPlatform(){
+  if(!S.isAdmin) return;
+  S.plat.loading=true;
+  try{
+    const [o,u,l]=await Promise.all([sb.rpc('admin_school_overview'),sb.rpc('admin_list_users'),sb.from('audit_log').select('at,actor,table_name,row_id,action,detail').order('at',{ascending:false}).limit(60)]);
+    if(o.error) throw o.error;
+    if(u.error) throw u.error;
+    S.plat.schools=rowsOf(o.data);S.plat.users=rowsOf(u.data);
+    S.plat.log=(l.data||[]).filter(r=>['schools','school_members','profiles'].includes(r.table_name)).slice(0,30);
+    S.plat.loaded=true;S.plat.err='';
+  }catch(e){S.plat.err=e.message||String(e);}
+  S.plat.loading=false;
+  if(S.view==='platform') render();
+}
+function platformHtml(){
+  if(S.plat.loading&&!S.plat.loaded) return '<div class="card empty"><div class="spin"></div><b>جارٍ التحميل…</b></div>';
+  if(S.plat.err) return `<div class="card empty"><b>تعذر التحميل</b>${esc(S.plat.err)}<br><button class="btn" onclick="loadPlatform()">إعادة المحاولة</button><p class="note">إن ظهرت رسالة عن دالة غير موجودة فطبّق الملف 01_foundation.sql أولًا.</p></div>`;
+  const P=S.plat;
+  return `<div class="notice" style="margin-top:0">${ic('info')}<span>هذه الصفحة تعرض الحسابات والمؤسسات وأعداد التلاميذ فقط. لا ترى أسماء التلاميذ ولا علاماتهم.</span></div>
+  <div class="card" style="margin-top:16px"><h3>${ic('building')}المؤسسات (${P.schools.length})</h3>${P.schools.length?`<div class="tw"><table><tr><th>المؤسسة</th><th>السنة</th><th>المديرون</th><th>الأساتذة</th><th>التلاميذ</th><th>أُنشئت</th></tr>${P.schools.map(s=>`<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.school_year)}</td><td>${s.managers}</td><td>${s.teachers}</td><td>${s.students}</td><td>${esc(String(s.created_at).slice(0,10))}</td></tr>`).join('')}</table></div>`:'<div class="empty">لا توجد مؤسسات.</div>'}</div>
+  <div class="card"><h3>${ic('users')}الحسابات (${P.users.length})</h3><div class="tw"><table><tr><th>البريد</th><th>أُنشئ</th><th>آخر دخول</th><th>مؤسسات يديرها</th><th>الحالة</th><th></th></tr>${P.users.map(u=>`<tr><td>${esc(u.email)}</td><td>${esc(String(u.created_at||'').slice(0,10))}</td><td>${esc(String(u.last_sign_in_at||'—').slice(0,10))}</td><td>${u.schools_managed}</td><td><span class="tag ${u.is_active?'ok':'low'}">${u.is_active?'نشط':'معطَّل'}</span></td><td>${u.uid===S.user.id?'<span class="note">حسابك</span>':`<button class="btn ${u.is_active?'danger':'ghost'} sm" onclick="adminSetActive('${u.uid}',${!u.is_active})">${u.is_active?'تعطيل':'تفعيل'}</button>`}</td></tr>`).join('')}</table></div></div>
+  <div class="card"><h3>${ic('clock')}آخر العمليات الإدارية</h3>${P.log.length?`<div class="tw"><table><tr><th>التاريخ</th><th>الجدول</th><th>العملية</th><th>التفاصيل</th></tr>${P.log.map(r=>`<tr><td>${esc(dshort(r.at))}</td><td>${esc(TBL[r.table_name]||r.table_name)}</td><td>${esc(ACT[r.action]||r.action)}</td><td>${esc(auditDetail(r))}</td></tr>`).join('')}</table></div>`:'<div class="empty">لا توجد عمليات.</div>'}</div>`;
+}
+async function adminSetActive(uid,active){
+  const reason=prompt('سبب التغيير (اختياري):');
+  if(reason===null) return;
+  const {error}=await sb.rpc('admin_set_user_active',{target:uid,active:active,reason:reason||null});
+  if(error) return say('تعذر تغيير الحالة: '+error.message,false);
+  say(active?'تم تفعيل الحساب.':'تم تعطيل الحساب.');await loadPlatform();
+}
+
 </script>
 </body>
 </html>
