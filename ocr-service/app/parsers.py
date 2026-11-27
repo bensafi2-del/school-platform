@@ -43,8 +43,8 @@ GRADE_TERMS = (
     "moyenne", "evaluation", "évaluation", "التقويم", "العلامات",
 )
 
-DIGIT_TRANSLATION = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789..")
-NUMBER_RE = re.compile(r"(?<![\w])(?:\d{1,2}(?:[.,]\d{1,2})?)(?![\w])")
+DIGIT_TRANSLATION = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬،", "0123456789...")
+NUMBER_RE = re.compile(r"(?<![\w])(?:\d{1,3}(?:[.,]\d{1,2})?)(?![\w])")
 
 
 def normalize_digits(value: Any) -> str:
@@ -294,12 +294,13 @@ def parse_ocr_lines(
 
         list_number = None
         mapped_values = numeric_values[:]
-        if ordered_fields and len(mapped_values) > len(ordered_fields):
+        if ordered_fields and len(matches) > len(ordered_fields):
             first = matches[0].group(0) if matches else ""
-            candidate_no = _number(first)
-            if candidate_no is not None and len(mapped_values) >= len(ordered_fields) + 1:
+            candidate_no = _number(first) if re.fullmatch(r"\d{1,4}", first) else None
+            if candidate_no is not None:
                 list_number = candidate_no
-                mapped_values = mapped_values[-len(ordered_fields):]
+                if len(mapped_values) > len(ordered_fields):
+                    mapped_values = mapped_values[-len(ordered_fields):]
 
         grades: dict[str, float | None] = {field: None for field in ordered_fields}
         sources: dict[str, dict[str, Any]] = {}
